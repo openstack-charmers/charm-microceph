@@ -1,4 +1,4 @@
 options:
   snap-channel:
-    default: "latest/stable"
+    default: "quincy/stable"
     type: string
