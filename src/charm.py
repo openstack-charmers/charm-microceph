@@ -330,7 +330,6 @@ class MicroCephCharm(sunbeam_charm.OSBaseOperatorCharm):
         """
         cmds = [
             ["ceph", "config", "set", "global", "mon_allow_pool_size_one", "true"],
-            ["ceph", "config", "set", "global", "osd_pool_default_size", "1"],
         ]
         try:
             for cmd in cmds:
