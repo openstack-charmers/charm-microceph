@@ -93,6 +93,11 @@ class MicroCephCharm(sunbeam_charm.OSBaseOperatorCharm):
         process = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=180)
         logger.debug(f"Command finished. stdout={process.stdout}, " f"stderr={process.stderr}")
 
+        cmd = ["sudo", "snap", "refresh", "--hold", "microceph"]
+        logger.debug(f'Running command {" ".join(cmd)}')
+        process = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        logger.debug(f"Command finished. stdout={process.stdout}, " f"stderr={process.stderr}")
+
     def _on_config_changed(self, event: ops.framework.EventBase) -> None:
         self.configure_charm(event)
 
