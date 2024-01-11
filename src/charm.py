@@ -239,7 +239,6 @@ class MicroCephCharm(sunbeam_charm.OSBaseOperatorCharm):
             self.bootstrap_cluster(event)
             # mark bootstrap node also as joined
             self.peers.interface.state.joined = True
-            self.configure_ceph()
 
         self.set_leader_ready()
 
@@ -322,27 +321,6 @@ class MicroCephCharm(sunbeam_charm.OSBaseOperatorCharm):
             error_no_node_exists = "No remote exists with the given name"
             if error_remove_node not in e.stderr and error_no_node_exists not in e.stderr:
                 raise e
-
-    def configure_ceph(self) -> None:
-        """Configure Ceph.
-
-        Set mon_allow_pool_size_one to true
-        """
-        cmds = [
-            ["ceph", "config", "set", "global", "mon_allow_pool_size_one", "true"],
-        ]
-        try:
-            for cmd in cmds:
-                logger.debug(f'Running command {" ".join(cmd)}')
-                process = subprocess.run(
-                    cmd, capture_output=True, text=True, check=True, timeout=60
-                )
-                logger.debug(
-                    f"Command finished. stdout={process.stdout}, " f"stderr={process.stderr}"
-                )
-        except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
-            logger.warning(e.stderr)
-            raise e
 
 
 if __name__ == "__main__":  # pragma: no cover
