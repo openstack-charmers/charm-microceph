@@ -24,13 +24,16 @@ https://opendev.org/openstack/charms.ceph/src/branch/master/charms_ceph/broker.p
 import collections
 import functools
 import json
+import os
 import socket
 from subprocess import CalledProcessError, check_call, check_output
+from tempfile import NamedTemporaryFile
 
 from ceph import (
     DEBUG,
     ERROR,
     INFO,
+    WARNING,
     ErasurePool,
     ReplicatedPool,
     erasure_profile_exists,
@@ -228,7 +231,7 @@ def process_requests(reqs):
     return resp
 
 
-def process_requests_v1(reqs):
+def process_requests_v1(reqs):  # noqa: C901
     """Process v1 requests.
 
     Takes a list of requests (dicts) and processes each one. If an error is
@@ -253,6 +256,40 @@ def process_requests_v1(reqs):
                 ret = handle_erasure_pool(request=req, service=svc)
             else:
                 ret = handle_replicated_pool(request=req, service=svc)
+        elif op == "create-cephfs":
+            ret = handle_create_cephfs(request=req, service=svc)
+        elif op == "create-erasure-profile":
+            ret = handle_create_erasure_profile(request=req, service=svc)
+        elif op == "delete-pool":
+            ret = delete_pool(service=svc, name=req.get("name"))
+        elif op == "rename-pool":
+            ret = rename_pool(service=svc, old_name=req.name("name"), new_name=req.get("new-name"))
+        elif op == "snapshot-pool":
+            ret = snapshot_pool(
+                service=svc, pool_name=req.name("name"), snapshot_name=req.get("snapshot-name")
+            )
+        elif op == "remove-pool-snapshot":
+            ret = remove_pool_snapshot(
+                service=svc, pool_name=req.get("name"), snapshot_name=req.get("snapshot-name")
+            )
+        elif op == "set-pool-value":
+            ret = handle_set_pool_value(request=req, service=svc)
+        elif op == "rgw-region-set":
+            ret = handle_rgw_region_set(request=req, service=svc)
+        elif op == "rgw-zone-set":
+            ret = handle_rgw_zone_set(request=req, service=svc)
+        elif op == "rgw-regionmap-update":
+            ret = handle_rgw_regionmap_update(request=req, service=svc)
+        elif op == "rgw-regionmap-default":
+            ret = handle_rgw_regionmap_default(request=req, service=svc)
+        elif op == "rgw-create-user":
+            ret = handle_rgw_create_user(request=req, service=svc)
+        elif op == "move-osd-to-bucket":
+            ret = handle_put_osd_in_bucket(request=req, service=svc)
+        elif op == "add-permissions-to-key":
+            ret = handle_add_permissions_to_key(request=req, service=svc)
+        elif op == "set-key-permissions":
+            ret = handle_set_key_permissions(request=req, service=svc)
         else:
             msg = "Unknown operation '{}'".format(op)
             log(msg, level=ERROR)
@@ -466,3 +503,563 @@ def is_leader():
         return True
     else:
         return False
+
+
+# Ceph broker implementation.
+
+
+def handle_create_cephfs(request, service):
+    """Create a new cephfs.
+
+    :param request: The broker request
+    :param service: The ceph client to run the command under.
+    :returns: dict. exit-code and reason if not 0
+    """
+    cephfs_name = request.get("mds_name")
+    data_pool = request.get("data_pool")
+    extra_pools = request.get("extra_pools", None) or []
+    metadata_pool = request.get("metadata_pool")
+    # Check if the user params were provided
+    if not cephfs_name or not data_pool or not metadata_pool:
+        msg = "Missing mds_name, data_pool or metadata_pool params"
+        log(msg, level=ERROR)
+        return {"exit-code": 1, "stderr": msg}
+
+    # Sanity check that the required pools exist
+    for pool_name in [data_pool, metadata_pool] + extra_pools:
+        if not pool_exists(service=service, name=pool_name):
+            msg = "CephFS pool {} does not exist. Cannot create CephFS".format(pool_name)
+            log(msg, level=ERROR)
+            return {"exit-code": 1, "stderr": msg}
+
+    # Finally create CephFS
+    try:
+        check_output(["ceph", "--id", service, "fs", "new", cephfs_name, metadata_pool, data_pool])
+    except CalledProcessError as err:
+        if err.returncode == 22:
+            log("CephFS already created")
+            return
+        else:
+            log(err.output, level=ERROR)
+            return {"exit-code": 1, "stderr": err.output}
+    for pool_name in extra_pools:
+        cmd = ["ceph", "--id", service, "fs", "add_data_pool", cephfs_name, pool_name]
+        try:
+            check_output(cmd)
+        except CalledProcessError as err:
+            log(err.output, level=ERROR)
+            return {"exit-code": 1, "stderr": err.output}
+
+
+def handle_create_erasure_profile(request, service):
+    """Create an erasure profile.
+
+    :param request: dict of request operations and params
+    :param service: The ceph client to run the command under.
+    :returns: dict. exit-code and reason if not 0
+    """
+    # "isa" | "lrc" | "shec" | "clay" or it defaults to "jerasure"
+    erasure_type = request.get("erasure-type")
+    # dependent on erasure coding type
+    erasure_technique = request.get("erasure-technique")
+    # "host" | "rack" | ...
+    failure_domain = request.get("failure-domain")
+    name = request.get("name")
+    # Binary Distribution Matrix (BDM) parameters
+    bdm_k = request.get("k")
+    bdm_m = request.get("m")
+    # LRC parameters
+    bdm_l = request.get("l")
+    crush_locality = request.get("crush-locality")
+    # SHEC parameters
+    bdm_c = request.get("c")
+    # CLAY parameters
+    bdm_d = request.get("d")
+    scalar_mds = request.get("scalar-mds")
+    # Device Class
+    device_class = request.get("device-class")
+
+    create_erasure_profile(
+        service=service,
+        erasure_plugin_name=erasure_type,
+        profile_name=name,
+        failure_domain=failure_domain,
+        data_chunks=bdm_k,
+        coding_chunks=bdm_m,
+        locality=bdm_l,
+        durability_estimator=bdm_d,
+        helper_chunks=bdm_c,
+        scalar_mds=scalar_mds,
+        crush_locality=crush_locality,
+        device_class=device_class,
+        erasure_plugin_technique=erasure_technique,
+    )
+
+    return {"exit-code": 0}
+
+
+def create_erasure_profile(  # noqa: C901
+    service,
+    profile_name,
+    erasure_plugin_name="jerasure",
+    failure_domain=None,
+    data_chunks=2,
+    coding_chunks=1,
+    locality=None,
+    durability_estimator=None,
+    helper_chunks=None,
+    scalar_mds=None,
+    crush_locality=None,
+    device_class=None,
+    erasure_plugin_technique=None,
+):
+    """Create a new erasure code profile if one does not already exist for it.
+
+    Profiles are considered immutable so will not be updated if the named
+    profile already exists.
+
+    Please refer to [0] for more details.
+
+    0: http://docs.ceph.com/docs/master/rados/operations/erasure-code-profile/
+
+    :param service: The Ceph user name to run the command under.
+    :type service: str
+    :param profile_name: Name of profile.
+    :type profile_name: str
+    :param erasure_plugin_name: Erasure code plugin.
+    :type erasure_plugin_name: str
+    :param failure_domain: Failure domain, one of:
+                           ('chassis', 'datacenter', 'host', 'osd', 'pdu',
+                            'pod', 'rack', 'region', 'room', 'root', 'row').
+    :type failure_domain: str
+    :param data_chunks: Number of data chunks.
+    :type data_chunks: int
+    :param coding_chunks: Number of coding chunks.
+    :type coding_chunks: int
+    :param locality: Locality.
+    :type locality: int
+    :param durability_estimator: Durability estimator.
+    :type durability_estimator: int
+    :param helper_chunks: int
+    :type helper_chunks: int
+    :param device_class: Restrict placement to devices of specific class.
+    :type device_class: str
+    :param scalar_mds: one of ['isa', 'jerasure', 'shec']
+    :type scalar_mds: str
+    :param crush_locality: LRC locality failure domain, one of:
+                           ('chassis', 'datacenter', 'host', 'osd', 'pdu', 'pod',
+                            'rack', 'region', 'room', 'root', 'row') or unset.
+    :type crush_locaity: str
+    :param erasure_plugin_technique: Coding technique for EC plugin
+    :type erasure_plugin_technique: str
+    :return: None.  Can raise CalledProcessError, ValueError or AssertionError
+    """
+    if erasure_profile_exists(service, profile_name):
+        log("EC profile {} exists, skipping update".format(profile_name), level=WARNING)
+        return
+
+    cmd = [
+        "ceph",
+        "--id",
+        service,
+        "osd",
+        "erasure-code-profile",
+        "set",
+        profile_name,
+        "plugin={}".format(erasure_plugin_name),
+        "k={}".format(str(data_chunks)),
+        "m={}".format(str(coding_chunks)),
+    ]
+
+    if erasure_plugin_technique:
+        cmd.append("technique={}".format(erasure_plugin_technique))
+
+    if failure_domain:
+        cmd.append("crush-failure-domain={}".format(failure_domain))
+
+    if device_class:
+        cmd.append("crush-device-class={}".format(device_class))
+
+    # Add plugin specific information
+    if erasure_plugin_name == "lrc":
+        # LRC mandatory configuration
+        if locality:
+            cmd.append("l={}".format(str(locality)))
+        else:
+            raise ValueError("locality must be provided for lrc plugin")
+        # LRC optional configuration
+        if crush_locality:
+            cmd.append("crush-locality={}".format(crush_locality))
+
+    if erasure_plugin_name == "shec":
+        # SHEC optional configuration
+        if durability_estimator:
+            cmd.append("c={}".format((durability_estimator)))
+
+    if erasure_plugin_name == "clay":
+        # CLAY optional configuration
+        if helper_chunks:
+            cmd.append("d={}".format(str(helper_chunks)))
+        if scalar_mds:
+            cmd.append("scalar-mds={}".format(scalar_mds))
+
+    check_call(cmd)
+
+
+def delete_pool(service, name):
+    """Delete a RADOS pool from ceph."""
+    cmd = ["ceph", "--id", service, "osd", "pool", "delete", name, "--yes-i-really-really-mean-it"]
+    check_call(cmd)
+
+
+def rename_pool(service, old_name, new_name):
+    """Rename a Ceph pool from old_name to new_name.
+
+    :param service: The Ceph user name to run the command under.
+    :type service: str
+    :param old_name: Name of pool subject to rename.
+    :type old_name: str
+    :param new_name: Name to rename pool to.
+    :type new_name: str
+    """
+    cmd = ["ceph", "--id", service, "osd", "pool", "rename", old_name, new_name]
+    check_call(cmd)
+
+
+def snapshot_pool(service, pool_name, snapshot_name):
+    """Snapshots a RADOS pool in Ceph.
+
+    :param service: The Ceph user name to run the command under.
+    :type service: str
+    :param pool_name: Name of pool to snapshot.
+    :type pool_name: str
+    :param snapshot_name: Name of snapshot to create.
+    :type snapshot_name: str
+    :raises: CalledProcessError
+    """
+    cmd = ["ceph", "--id", service, "osd", "pool", "mksnap", pool_name, snapshot_name]
+    check_call(cmd)
+
+
+def remove_pool_snapshot(service, pool_name, snapshot_name):
+    """Remove a snapshot from a RADOS pool in Ceph.
+
+    :param service: The Ceph user name to run the command under.
+    :type service: str
+    :param pool_name: Name of pool to remove snapshot from.
+    :type pool_name: str
+    :param snapshot_name: Name of snapshot to remove.
+    :type snapshot_name: str
+    :raises: CalledProcessError
+    """
+    cmd = ["ceph", "--id", service, "osd", "pool", "rmsnap", pool_name, snapshot_name]
+    check_call(cmd)
+
+
+def handle_set_pool_value(request, service, coerce=False):
+    """Sets an arbitrary pool value.
+
+    :param request: dict of request operations and params
+    :param service: The ceph client to run the command under.
+    :param coerce: Try to parse/coerce the value into the correct type.
+                   Used by the action code that only gets Str from Juju
+    :returns: dict. exit-code and reason if not 0
+    """
+    pool_name = request.get("name")
+    key = request.get("key")
+    value = request.get("value")
+
+    cmd = ["ceph", "--id", service, "osd", "pool", "set", pool_name, key, str(value).lower()]
+    check_call(cmd)
+
+
+def handle_rgw_region_set(request, service):
+    """Set the rados gateway region.
+
+    :param request: dict. The broker request.
+    :param service: The ceph client to run the command under.
+    :returns: dict. exit-code and reason if not 0
+    """
+    json_file = request.get("region-json")
+    name = request.get("client-name")
+    region_name = request.get("region-name")
+    zone_name = request.get("zone-name")
+    if not json_file or not name or not region_name or not zone_name:
+        msg = "Missing json-file or client-name params"
+        log(msg, level=ERROR)
+        return {"exit-code": 1, "stderr": msg}
+    infile = NamedTemporaryFile(delete=False)
+    with open(infile.name, "w") as infile_handle:
+        infile_handle.write(json_file)
+    try:
+        check_output(
+            [
+                "radosgw-admin",
+                "--id",
+                service,
+                "region",
+                "set",
+                "--rgw-zone",
+                zone_name,
+                "--infile",
+                infile.name,
+                "--name",
+                name,
+            ]
+        )
+    except CalledProcessError as err:
+        log(err.output, level=ERROR)
+        return {"exit-code": 1, "stderr": err.output}
+    finally:
+        os.unlink(infile.name)
+
+
+def handle_rgw_zone_set(request, service):
+    """Create a radosgw zone.
+
+    :param request: dict of request operations and params
+    :param service: The ceph client to run the command under.
+    :returns: dict. exit-code and reason if not 0
+    """
+    json_file = request.get("zone-json")
+    name = request.get("client-name")
+    region_name = request.get("region-name")
+    zone_name = request.get("zone-name")
+    if not json_file or not name or not region_name or not zone_name:
+        msg = "Missing json-file or client-name params"
+        log(msg, level=ERROR)
+        return {"exit-code": 1, "stderr": msg}
+    infile = NamedTemporaryFile(delete=False)
+    with open(infile.name, "w") as infile_handle:
+        infile_handle.write(json_file)
+    try:
+        check_output(
+            [
+                "radosgw-admin",
+                "--id",
+                service,
+                "zone",
+                "set",
+                "--rgw-zone",
+                zone_name,
+                "--infile",
+                infile.name,
+                "--name",
+                name,
+            ]
+        )
+    except CalledProcessError as err:
+        log(err.output, level=ERROR)
+        return {"exit-code": 1, "stderr": err.output}
+    finally:
+        os.unlink(infile.name)
+
+
+def handle_rgw_regionmap_update(request, service):
+    """Change the radosgw region map.
+
+    :param request: dict of request operations and params
+    :param service: The ceph client to run the command under.
+    :returns: dict. exit-code and reason if not 0
+    """
+    name = request.get("client-name")
+    if not name:
+        msg = "Missing rgw-region or client-name params"
+        log(msg, level=ERROR)
+        return {"exit-code": 1, "stderr": msg}
+    try:
+        check_output(["radosgw-admin", "--id", service, "regionmap", "update", "--name", name])
+    except CalledProcessError as err:
+        log(err.output, level=ERROR)
+        return {"exit-code": 1, "stderr": err.output}
+
+
+def handle_rgw_regionmap_default(request, service):
+    """Create a radosgw region map.
+
+    :param request: dict of request operations and params
+    :param service: The ceph client to run the command under.
+    :returns: dict. exit-code and reason if not 0
+    """
+    region = request.get("rgw-region")
+    name = request.get("client-name")
+    if not region or not name:
+        msg = "Missing rgw-region or client-name params"
+        log(msg, level=ERROR)
+        return {"exit-code": 1, "stderr": msg}
+    try:
+        check_output(
+            [
+                "radosgw-admin",
+                "--id",
+                service,
+                "regionmap",
+                "default",
+                "--rgw-region",
+                region,
+                "--name",
+                name,
+            ]
+        )
+    except CalledProcessError as err:
+        log(err.output, level=ERROR)
+        return {"exit-code": 1, "stderr": err.output}
+
+
+def handle_rgw_create_user(request, service):
+    """Create a new rados gateway user.
+
+    :param request: dict of request operations and params
+    :param service: The ceph client to run the command under.
+    :returns: dict. exit-code and reason if not 0
+    """
+    user_id = request.get("rgw-uid")
+    display_name = request.get("display-name")
+    name = request.get("client-name")
+    if not name or not display_name or not user_id:
+        msg = "Missing client-name, display-name or rgw-uid"
+        log(msg, level=ERROR)
+        return {"exit-code": 1, "stderr": msg}
+    try:
+        create_output = check_output(
+            [
+                "radosgw-admin",
+                "--id",
+                service,
+                "user",
+                "create",
+                "--uid",
+                user_id,
+                "--display-name",
+                display_name,
+                "--name",
+                name,
+                "--system",
+            ]
+        )
+        try:
+            user_json = json.loads(str(create_output.decode("UTF-8")))
+            return {"exit-code": 0, "user": user_json}
+        except ValueError as err:
+            log(err, level=ERROR)
+            return {"exit-code": 1, "stderr": err}
+
+    except CalledProcessError as err:
+        log(err.output, level=ERROR)
+        return {"exit-code": 1, "stderr": err.output}
+
+
+def handle_put_osd_in_bucket(request, service):
+    """Move an osd into a specified crush bucket.
+
+    :param request: dict of request operations and params
+    :param service: The ceph client to run the command under.
+    :returns: dict. exit-code and reason if not 0
+    """
+    osd_id = request.get("osd")
+    target_bucket = request.get("bucket")
+    if not osd_id or not target_bucket:
+        msg = "Missing OSD ID or Bucket"
+        log(msg, level=ERROR)
+        return {"exit-code": 1, "stderr": msg}
+    try:
+        check_output(
+            [
+                "ceph",
+                "--id",
+                service,
+                "osd",
+                "crush",
+                "set",
+                str(osd_id),
+                str(get_osd_weight(osd_id)),
+                "root={}".format(target_bucket),
+            ]
+        )
+
+    except Exception as exc:
+        msg = "Failed to move OSD " "{} into Bucket {} :: {}".format(osd_id, target_bucket, exc)
+        log(msg, level=ERROR)
+        return {"exit-code": 1, "stderr": msg}
+
+
+def handle_set_key_permissions(request, service):
+    """Ensure the key has the requested permissions."""
+    permissions = request.get("permissions")
+    client = request.get("client")
+    call = ["ceph", "--id", service, "auth", "caps", "client.{}".format(client)] + permissions
+    try:
+        check_call(call)
+    except CalledProcessError as e:
+        log("Error updating key capabilities: {}".format(e), level=ERROR)
+
+
+def handle_add_permissions_to_key(request, service):
+    """Groups are defined by the key cephx.groups.(namespace-)?-(name).
+
+    This key will contain a dict serialized to JSON with data about the group,
+    including pools and members.
+
+    A group can optionally have a namespace defined that will be used to
+    further restrict pool access.
+    """
+    resp = {"exit-code": 0}
+
+    service_name = request.get("name")
+    group_name = request.get("group")
+    group_namespace = request.get("group-namespace")
+    if group_namespace:
+        group_name = "{}-{}".format(group_namespace, group_name)
+    group = get_group(group_name=group_name)
+    service_obj = get_service_groups(service=service_name, namespace=group_namespace)
+    if request.get("object-prefix-permissions"):
+        service_obj["object_prefix_perms"] = request.get("object-prefix-permissions")
+    permission = request.get("group-permission") or "rwx"
+    if service_name not in group["services"]:
+        group["services"].append(service_name)
+    save_group(group=group, group_name=group_name)
+    if permission not in service_obj["group_names"]:
+        service_obj["group_names"][permission] = []
+    if group_name not in service_obj["group_names"][permission]:
+        service_obj["group_names"][permission].append(group_name)
+    save_service(service=service_obj, service_name=service_name)
+    service_obj["groups"] = _build_service_groups(service_obj, group_namespace)
+    update_service_permissions(service_name, service_obj, group_namespace)
+
+    return resp
+
+
+def save_service(service_name, service):
+    """Persist a service in the monitor cluster."""
+    service["groups"] = {}
+    return monitor_key_set(
+        service="admin",
+        key="cephx.services.{}".format(service_name),
+        value=json.dumps(service, sort_keys=True),
+    )
+
+
+def get_osd_weight(osd_id):
+    """Returns the weight of the specified OSD.
+
+    :returns: Float
+    :raises: ValueError if the monmap fails to parse.
+    :raises: CalledProcessError if our Ceph command fails.
+    """
+    try:
+        tree = check_output(["ceph", "osd", "tree", "--format=json"])
+        tree = tree.decode("UTF-8")
+        try:
+            json_tree = json.loads(tree)
+            # Make sure children are present in the JSON
+            if not json_tree["nodes"]:
+                return None
+            for device in json_tree["nodes"]:
+                if device["type"] == "osd" and device["name"] == osd_id:
+                    return device["crush_weight"]
+        except ValueError as v:
+            log("Unable to parse ceph tree json: {}. Error: {}".format(tree, v))
+            raise
+    except CalledProcessError as e:
+        log("ceph osd tree command failed with message: {}".format(e))
+        raise
