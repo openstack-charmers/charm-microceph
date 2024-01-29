@@ -26,3 +26,23 @@ provides:
 peers:
   peers:
     interface: ceph-peer
+
+storage:
+  osd-devices:
+    type: block
+    multiple:
+      range: 0-
+    minimum-size: 2G
+  disk:
+    type: block
+    multiple:
+      range: 0-
+    minimum-size: 2G
+  db:
+    type: block
+    multiple:
+      range: 0-
+  wal:
+    type: block
+    multiple:
+      range: 0-

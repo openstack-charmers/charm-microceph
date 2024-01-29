@@ -1,9 +1,27 @@
 #!/usr/bin/env python3
 
+# Copyright 2024 Canonical Ltd.
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 """Handle Ceph commands."""
 
+import json
 import logging
 import subprocess
+from socket import gethostname
+
+from charms.operator_libs_linux.v2.snap import SnapCache
 
 logger = logging.getLogger(__name__)
 
@@ -17,6 +35,19 @@ def _run_cmd(cmd: list) -> str:
     except subprocess.CalledProcessError as e:
         logger.error(f"Failed executing cmd: {cmd}, error: {e.stderr}")
         raise e
+
+
+def _is_ready()-> bool:
+    """Checks if the microceph snap is installed and bootstrapped/joined."""
+    if not SnapCache()["microceph"].present:
+        logger.warning("Snap microceph not installed yet.")
+        return False
+
+    if not is_cluster_member(gethostname()):
+        logger.warning("Microceph not bootstrapped yet.")
+        return False
+
+    return True
 
 
 def remove_cluster_member(name: str, is_force: bool) -> None:
@@ -57,8 +88,88 @@ def is_cluster_member(hostname: str) -> bool:
         else:
             raise e
 
-
-def add_osd_cmd(spec: str) -> None:
+"""Disk CMDs and Helpers"""
+def add_osd_cmd(spec: str, wal_dev: str = None, db_dev: str = None) -> None:
     """Executes MicroCeph add osd cmd with provided spec."""
     cmd = ["microceph", "disk", "add", spec]
+    if wal_dev:
+        cmd.extend(["--wal-device", wal_dev, "--wal-wipe"])
+    if db_dev:
+        cmd.extend(["--db-device", db_dev, "--db-wipe"])
     _run_cmd(cmd)
+
+def list_disk_cmd() -> dict:
+    """Fetches MicroCeph configured and unpartitioned disks as a dict."""
+    cmd = ["microceph", "disk", "list", "--json"]
+    return json.loads(_run_cmd(cmd))
+
+def remove_disk_cmd(osd_num: int) -> None:
+    """Removes requested OSD."""
+    cmd = ["microceph", "disk", "add", osd_num]
+    _run_cmd(cmd)
+
+def remove_disk(detaching_disk: str) -> None:
+    """Removes Disk if configured as an OSD, does nothing otherwise."""
+    disks = list_disk_cmd()["ConfiguredDisks"]
+
+    logger.info(f"Detaching Disk: {detaching_disk}, and Configured Disks:{disks}")
+
+    # Find the OSD number.
+    osd_num = -1  # impossible default.
+    for disk in disks:
+        if detaching_disk == disk["path"]:
+            osd_num = disk["osd"]
+            break
+
+    # Not enrolled as OSD.
+    if osd_num < 0:
+        logger.info(f"{detaching_disk} not an OSD, nothing to do.")
+        return
+
+    remove_disk_cmd(osd_num)
+
+def enroll_disks_as_osds(disks: list) -> None:
+    """Enrolls the provided block devices as OSDs."""
+    if not disks:
+        return
+
+    available_disks = []
+    for disk in disks:
+        if not _is_block_device_enrollable(disk):
+            err_str = f"provided disk {disk} is not enrollable as an OSD."
+            logger.error(err_str)
+            raise ValueError(err_str)
+
+        available_disks.append(disk)
+
+    # pass disks as space separated arguments.
+    add_osd_cmd(" ".join(available_disks))
+
+def _get_disk_info(disk: str) -> dict:
+    """Fetches disk info from lsblk as a python dict."""
+    try:
+        disk_info = json.loads(_run_cmd(["lsblk", f"{disk}", "--json"]))["blockdevices"]
+        return disk_info[0]
+    except subprocess.CalledProcessError as e:
+        if "not a block device" in e.stderr:
+            return {}
+        else:
+            raise e
+
+def _is_block_device_enrollable(disk: str) -> bool:
+    """Checks if the provided block device is enrollable as an OSD."""
+    device = _get_disk_info(disk)
+
+    if len(device) == 0:
+        return False
+
+    # the json interpretation of [null] -> [None].
+    if None not in device["mountpoints"]:
+        logger.warning(f"Disk {disk} has mounts.")
+        return False
+
+    if "children" in device.keys():
+        logger.warning(f"Disk {disk} has partitions.")
+        return False
+
+    return True

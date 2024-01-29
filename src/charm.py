@@ -29,14 +29,20 @@ from typing import List
 import charms.operator_libs_linux.v2.snap as snap
 import netifaces
 import ops.framework
+
+import ops_sunbeam.compound_status as compound_status
 import ops_sunbeam.charm as sunbeam_charm
 import ops_sunbeam.relation_handlers as sunbeam_rhandlers
-from ops.charm import ActionEvent
+from ops.charm import ActionEvent, StorageAttachedEvent, StorageDetachingEvent
 from ops.main import main
 
 import microceph
 from ceph import get_osd_count
 from ceph_broker import get_named_key
+
+from ops.model import (
+    BlockedStatus,
+)
 from relation_handlers import (
     CephClientProviderHandler,
     CephRadosGWProviderHandler,
@@ -44,6 +50,7 @@ from relation_handlers import (
     MicroClusterNodeAddedEvent,
     MicroClusterPeerHandler,
 )
+from storage import StorageHandler, StorageBlockedEvent
 
 logger = logging.getLogger(__name__)
 
@@ -53,14 +60,21 @@ class MicroCephCharm(sunbeam_charm.OSBaseOperatorCharm):
 
     _state = ops.framework.StoredState()
     service_name = "microceph"
+    storage = None  # StorageHandler
 
     def __init__(self, framework: ops.framework.Framework) -> None:
         """Run constructor."""
         super().__init__(framework)
+
+        self.storage = StorageHandler(self)
         self.framework.observe(self.on.install, self._on_install)
         self.framework.observe(self.on.list_disks_action, self._list_disks_action)
         self.framework.observe(self.on.add_osd_action, self._add_osd_action)
         self.framework.observe(self.on.stop, self._on_stop)
+        self.framework.observe(self.storage.on.storage_blocked, self._on_storage_blocked)
+
+        # workload priority is 100.
+        self.disk_status = compound_status.Status('Disk', 120)
 
     def _on_install(self, event: ops.framework.EventBase) -> None:
         config = self.model.config.get
@@ -136,6 +150,13 @@ class MicroCephCharm(sunbeam_charm.OSBaseOperatorCharm):
         finally:
             self.radosgw.force = False
 
+    def _on_storage_blocked(self, event: StorageBlockedEvent):
+        """Handler for storage updated event."""
+        logger.error(event.msg)
+        self.status.set(
+            BlockedStatus(event.msg)
+        )
+
     def _add_osd_action(self, event: ActionEvent):
         """Add OSD disks to microceph."""
         if not self.peers.interface.state.joined:
@@ -169,6 +190,16 @@ class MicroCephCharm(sunbeam_charm.OSBaseOperatorCharm):
         if empty:
             # Inform RadosGW units that there's now an OSD.
             self._notify_radosgw()
+
+    def _on_storage_attached(self, event: StorageAttachedEvent):
+        """Event handler for storage attach event."""
+        logger.debug(f"Storage Info for attach event: {event.storage}")
+        microceph._run_cmd(["lsblk"])
+
+    def _on_storage_detaching(self, event: StorageDetachingEvent):
+        """Event handler for storage detaching event."""
+        logger.debug(f"Storage Info for detaching event: {event.storage}")
+        microceph._run_cmd(["lsblk"])
 
     def _handle_disk_list_output(self, output: str) -> dict:
         # Do not use _ for keys that need to set in action result, instead use -.

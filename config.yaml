@@ -1,4 +1,5 @@
 options:
   snap-channel:
-    default: "reef/stable"
+    # TODO: Revert this once the patch (https://github.com/canonical/microceph/pull/295) gets merged.
+    default: "latest/edge/json"
     type: string
