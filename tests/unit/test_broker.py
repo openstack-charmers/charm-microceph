@@ -54,13 +54,14 @@ class TestBroker(test_utils.CharmTestCase):
         rv = broker.handle_replicated_pool(req, "admin")
         self.assertEqual(rv["exit-code"], 1)
 
-        req = {"name": "mypool", "pg_num": 1, "replicas": 200}
+        req = {"name": "mypool", "pg_num": 4, "replicas": 200}
         pool = MagicMock()
         rpool.reset_mock()
         rpool.side_effect = lambda *args, **kwargs: pool
         pool_exists.return_value = False
         rv = broker.handle_replicated_pool(req, "admin")
         self.assertIsNone(rv)
+        self.assertEqual(req["pg_num"], 1)
         pool.create.assert_called()
         pool.update.assert_called()
 
