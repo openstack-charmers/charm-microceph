@@ -263,10 +263,10 @@ def process_requests_v1(reqs):  # noqa: C901
         elif op == "delete-pool":
             ret = delete_pool(service=svc, name=req.get("name"))
         elif op == "rename-pool":
-            ret = rename_pool(service=svc, old_name=req.name("name"), new_name=req.get("new-name"))
+            ret = rename_pool(service=svc, old_name=req.get("name"), new_name=req.get("new-name"))
         elif op == "snapshot-pool":
             ret = snapshot_pool(
-                service=svc, pool_name=req.name("name"), snapshot_name=req.get("snapshot-name")
+                service=svc, pool_name=req.get("name"), snapshot_name=req.get("snapshot-name")
             )
         elif op == "remove-pool-snapshot":
             ret = remove_pool_snapshot(
