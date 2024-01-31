@@ -233,6 +233,7 @@ def process_requests(reqs):
 
 _BROKER_JUMP_TABLE = None
 
+
 def _get_broker_jump_table():
     global _BROKER_JUMP_TABLE
     ret = _BROKER_JUMP_TABLE
@@ -255,7 +256,7 @@ def _get_broker_jump_table():
         "rgw-create-user": handle_rgw_create_user,
         "move-osd-to-bucket": handle_put_osd_in_bucket,
         "add-permissions-to-key": handle_add_permissions_to_key,
-        "set-key-permissions": handle_set_key_permissions
+        "set-key-permissions": handle_set_key_permissions,
     }
 
     _BROKER_JUMP_TABLE = ret
@@ -295,6 +296,7 @@ def process_requests_v1(reqs):  # noqa: C901
 
 
 def handle_create_pool(request, service):
+    """Handle the creation of an erasure or replicated pool."""
     pool_type = request.get("pool-type")
     if pool_type == "erasure":
         return handle_erasure_pool(request=request, service=service)
@@ -708,7 +710,16 @@ def create_erasure_profile(  # noqa: C901
 
 def delete_pool(service, request):
     """Delete a RADOS pool from ceph."""
-    cmd = ["ceph", "--id", service, "osd", "pool", "delete", request.get("name"), "--yes-i-really-really-mean-it"]
+    cmd = [
+        "ceph",
+        "--id",
+        service,
+        "osd",
+        "pool",
+        "delete",
+        request.get("name"),
+        "--yes-i-really-really-mean-it",
+    ]
     check_call(cmd)
 
 
@@ -720,7 +731,16 @@ def rename_pool(service, request):
     :param request: The request with the old and new names for the pool.
     :type request: dict
     """
-    cmd = ["ceph", "--id", service, "osd", "pool", "rename", request.get("name"), request.get("new-name")]
+    cmd = [
+        "ceph",
+        "--id",
+        service,
+        "osd",
+        "pool",
+        "rename",
+        request.get("name"),
+        request.get("new-name"),
+    ]
     check_call(cmd)
 
 
@@ -733,7 +753,16 @@ def snapshot_pool(service, request):
     :type snapshot_name: dict
     :raises: CalledProcessError
     """
-    cmd = ["ceph", "--id", service, "osd", "pool", "mksnap", request.get("name"), request.get("snapshot-name")]
+    cmd = [
+        "ceph",
+        "--id",
+        service,
+        "osd",
+        "pool",
+        "mksnap",
+        request.get("name"),
+        request.get("snapshot-name"),
+    ]
     check_call(cmd)
 
 
@@ -748,7 +777,16 @@ def remove_pool_snapshot(service, request):
     :type snapshot_name: str
     :raises: CalledProcessError
     """
-    cmd = ["ceph", "--id", service, "osd", "pool", "rmsnap", request.get("name"), request.get("snapshot-name")]
+    cmd = [
+        "ceph",
+        "--id",
+        service,
+        "osd",
+        "pool",
+        "rmsnap",
+        request.get("name"),
+        request.get("snapshot-name"),
+    ]
     check_call(cmd)
 
 
