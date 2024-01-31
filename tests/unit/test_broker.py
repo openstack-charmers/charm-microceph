@@ -187,3 +187,14 @@ class TestBroker(test_utils.CharmTestCase):
         check_output.side_effect = MagicMock
         rv = broker.handle_put_osd_in_bucket(req, "admin")
         self.assertIsNone(rv)
+
+    @patch.object(broker, "check_call")
+    @patch.object(broker, "check_output")
+    def test_broker_misc(self, check_output, check_call):
+        req = {}
+        reqs = [req]
+
+        for op in ("delete-pool", "rename-pool", "snapshot-pool", "remove-pool-snapshot"):
+            req["op"] = op
+            ret = broker.process_requests_v1(reqs)
+            self.assertEqual(ret["exit-code"], 0)

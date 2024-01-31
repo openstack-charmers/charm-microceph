@@ -231,6 +231,37 @@ def process_requests(reqs):
     return resp
 
 
+_BROKER_JUMP_TABLE = None
+
+def _get_broker_jump_table():
+    global _BROKER_JUMP_TABLE
+    ret = _BROKER_JUMP_TABLE
+    if ret is not None:
+        return ret
+
+    ret = {
+        "create-pool": handle_create_pool,
+        "create-cephfs": handle_create_cephfs,
+        "create-erasure-profile": handle_create_erasure_profile,
+        "delete-pool": delete_pool,
+        "rename-pool": rename_pool,
+        "snapshot-pool": snapshot_pool,
+        "remove-pool-snapshot": remove_pool_snapshot,
+        "set-pool-value": handle_set_pool_value,
+        "rgw-region-set": handle_rgw_region_set,
+        "rgw-zone-set": handle_rgw_zone_set,
+        "rgw-regionmap-update": handle_rgw_regionmap_update,
+        "reg-regionmap-default": handle_rgw_regionmap_default,
+        "rgw-create-user": handle_rgw_create_user,
+        "move-osd-to-bucket": handle_put_osd_in_bucket,
+        "add-permissions-to-key": handle_add_permissions_to_key,
+        "set-key-permissions": handle_set_key_permissions
+    }
+
+    _BROKER_JUMP_TABLE = ret
+    return ret
+
+
 def process_requests_v1(reqs):  # noqa: C901
     """Process v1 requests.
 
@@ -248,57 +279,26 @@ def process_requests_v1(reqs):  # noqa: C901
         # Use admin client since we do not have other client key locations
         # setup to use them for these operations.
         svc = "admin"
-        if op == "create-pool":
-            pool_type = req.get("pool-type")  # "replicated" | "erasure"
-
-            # Default to replicated if pool_type isn't given
-            if pool_type == "erasure":
-                ret = handle_erasure_pool(request=req, service=svc)
-            else:
-                ret = handle_replicated_pool(request=req, service=svc)
-        elif op == "create-cephfs":
-            ret = handle_create_cephfs(request=req, service=svc)
-        elif op == "create-erasure-profile":
-            ret = handle_create_erasure_profile(request=req, service=svc)
-        elif op == "delete-pool":
-            ret = delete_pool(service=svc, name=req.get("name"))
-        elif op == "rename-pool":
-            ret = rename_pool(service=svc, old_name=req.get("name"), new_name=req.get("new-name"))
-        elif op == "snapshot-pool":
-            ret = snapshot_pool(
-                service=svc, pool_name=req.get("name"), snapshot_name=req.get("snapshot-name")
-            )
-        elif op == "remove-pool-snapshot":
-            ret = remove_pool_snapshot(
-                service=svc, pool_name=req.get("name"), snapshot_name=req.get("snapshot-name")
-            )
-        elif op == "set-pool-value":
-            ret = handle_set_pool_value(request=req, service=svc)
-        elif op == "rgw-region-set":
-            ret = handle_rgw_region_set(request=req, service=svc)
-        elif op == "rgw-zone-set":
-            ret = handle_rgw_zone_set(request=req, service=svc)
-        elif op == "rgw-regionmap-update":
-            ret = handle_rgw_regionmap_update(request=req, service=svc)
-        elif op == "rgw-regionmap-default":
-            ret = handle_rgw_regionmap_default(request=req, service=svc)
-        elif op == "rgw-create-user":
-            ret = handle_rgw_create_user(request=req, service=svc)
-        elif op == "move-osd-to-bucket":
-            ret = handle_put_osd_in_bucket(request=req, service=svc)
-        elif op == "add-permissions-to-key":
-            ret = handle_add_permissions_to_key(request=req, service=svc)
-        elif op == "set-key-permissions":
-            ret = handle_set_key_permissions(request=req, service=svc)
-        else:
+        jump_table = _get_broker_jump_table()
+        fn = jump_table.get(op)
+        if fn is None:
             msg = "Unknown operation '{}'".format(op)
             log(msg, level=ERROR)
             return {"exit-code": 1, "stderr": msg}
+        else:
+            ret = fn(request=req, service=svc)
 
     if type(ret) == dict and "exit-code" in ret:
         return ret
 
     return {"exit-code": 0}
+
+
+def handle_create_pool(request, service):
+    pool_type = request.get("pool-type")
+    if pool_type == "erasure":
+        return handle_erasure_pool(request=request, service=service)
+    return handle_replicated_pool(request=request, service=service)
 
 
 def handle_erasure_pool(request, service):
@@ -706,42 +706,38 @@ def create_erasure_profile(  # noqa: C901
     check_call(cmd)
 
 
-def delete_pool(service, name):
+def delete_pool(service, request):
     """Delete a RADOS pool from ceph."""
-    cmd = ["ceph", "--id", service, "osd", "pool", "delete", name, "--yes-i-really-really-mean-it"]
+    cmd = ["ceph", "--id", service, "osd", "pool", "delete", request.get("name"), "--yes-i-really-really-mean-it"]
     check_call(cmd)
 
 
-def rename_pool(service, old_name, new_name):
+def rename_pool(service, request):
     """Rename a Ceph pool from old_name to new_name.
 
     :param service: The Ceph user name to run the command under.
     :type service: str
-    :param old_name: Name of pool subject to rename.
-    :type old_name: str
-    :param new_name: Name to rename pool to.
-    :type new_name: str
+    :param request: The request with the old and new names for the pool.
+    :type request: dict
     """
-    cmd = ["ceph", "--id", service, "osd", "pool", "rename", old_name, new_name]
+    cmd = ["ceph", "--id", service, "osd", "pool", "rename", request.get("name"), request.get("new-name")]
     check_call(cmd)
 
 
-def snapshot_pool(service, pool_name, snapshot_name):
+def snapshot_pool(service, request):
     """Snapshots a RADOS pool in Ceph.
 
     :param service: The Ceph user name to run the command under.
     :type service: str
-    :param pool_name: Name of pool to snapshot.
-    :type pool_name: str
-    :param snapshot_name: Name of snapshot to create.
-    :type snapshot_name: str
+    :param request: The request with the pool and snapshot names.
+    :type snapshot_name: dict
     :raises: CalledProcessError
     """
-    cmd = ["ceph", "--id", service, "osd", "pool", "mksnap", pool_name, snapshot_name]
+    cmd = ["ceph", "--id", service, "osd", "pool", "mksnap", request.get("name"), request.get("snapshot-name")]
     check_call(cmd)
 
 
-def remove_pool_snapshot(service, pool_name, snapshot_name):
+def remove_pool_snapshot(service, request):
     """Remove a snapshot from a RADOS pool in Ceph.
 
     :param service: The Ceph user name to run the command under.
@@ -752,7 +748,7 @@ def remove_pool_snapshot(service, pool_name, snapshot_name):
     :type snapshot_name: str
     :raises: CalledProcessError
     """
-    cmd = ["ceph", "--id", service, "osd", "pool", "rmsnap", pool_name, snapshot_name]
+    cmd = ["ceph", "--id", service, "osd", "pool", "rmsnap", request.get("name"), request.get("snapshot-name")]
     check_call(cmd)
 
 
