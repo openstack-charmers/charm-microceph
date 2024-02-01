@@ -22,6 +22,7 @@ This charm deploys and manages microceph.
 import json
 import logging
 import re
+import socket
 import subprocess
 from socket import gethostname
 from typing import List
@@ -30,7 +31,7 @@ import charms.operator_libs_linux.v2.snap as snap
 import ops.framework
 import ops_sunbeam.charm as sunbeam_charm
 import ops_sunbeam.relation_handlers as sunbeam_rhandlers
-from netifaces import AF_INET, gateways, ifaddresses
+import pyroute2
 from ops.charm import ActionEvent
 from ops.main import main
 
@@ -47,19 +48,12 @@ logger = logging.getLogger(__name__)
 
 
 def _get_local_ip_by_default_route() -> str:
-    """Get IP address of host associated with default gateway."""
-    interface = "lo"
-    ip = "127.0.0.1"
-
-    # TOCHK: Gathering only IPv4
-    if "default" in gateways():
-        interface = gateways()["default"][AF_INET][1]
-
-    ip_list = ifaddresses(interface)[AF_INET]
-    if len(ip_list) > 0 and "addr" in ip_list[0]:
-        ip = ip_list[0]["addr"]
-
-    return ip
+    """Get IP address of host associated with default route."""
+    with pyroute2.NDB() as ndb:
+        default_route_ifindex = ndb.routes["default"]["oif"]
+        iface = ndb.interfaces[default_route_ifindex]
+        ipaddr = iface.ipaddr[socket.AF_INET]["address"]
+        return ipaddr
 
 
 class MicroCephCharm(sunbeam_charm.OSBaseOperatorCharm):
