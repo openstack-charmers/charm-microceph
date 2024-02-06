@@ -229,12 +229,12 @@ class MicroCephCharm(sunbeam_charm.OSBaseOperatorCharm):
             addrs = netifaces.ifaddresses(intf)
 
             # check ipv4 addresses
-            for addr in addrs[netifaces.AF_INET]:
+            for addr in addrs.get(netifaces.AF_INET, []):
                 if addr["addr"] in mon_hosts:
                     return addr["addr"]
 
             # check ipv6 addresses.
-            for addr in addrs[netifaces.AF_INET6]:
+            for addr in addrs.get(netifaces.AF_INET6, []):
                 if addr["addr"] in mon_hosts:
                     return addr["addr"]
 
