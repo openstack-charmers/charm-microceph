@@ -98,6 +98,17 @@ def add_osd_cmd(spec: str, wal_dev: str = None, db_dev: str = None) -> None:
         cmd.extend(["--db-device", db_dev, "--db-wipe"])
     _run_cmd(cmd)
 
+def add_batch_osds(disks: list) -> None:
+    """Enroll multiple disks as OSD."""
+    cmd = ["microceph", "disk", "add"]
+
+    if not disks:
+        # nothing to do.
+        return
+
+    cmd.extend(disks)
+    _run_cmd(cmd)
+
 def list_disk_cmd() -> dict:
     """Fetches MicroCeph configured and unpartitioned disks as a dict."""
     cmd = ["microceph", "disk", "list", "--json"]
@@ -105,7 +116,7 @@ def list_disk_cmd() -> dict:
 
 def remove_disk_cmd(osd_num: int) -> None:
     """Removes requested OSD."""
-    cmd = ["microceph", "disk", "add", osd_num]
+    cmd = ["microceph", "disk", "remove", str(osd_num)]
     _run_cmd(cmd)
 
 def remove_disk(detaching_disk: str) -> None:
@@ -117,13 +128,14 @@ def remove_disk(detaching_disk: str) -> None:
     # Find the OSD number.
     osd_num = -1  # impossible default.
     for disk in disks:
-        if detaching_disk == disk["path"]:
+        # e.g. check "vdd" in "/dev/vdd"
+        if _get_disk_info(disk["path"])["name"] in detaching_disk:
             osd_num = disk["osd"]
             break
 
     # Not enrolled as OSD.
     if osd_num < 0:
-        logger.info(f"{detaching_disk} not an OSD, nothing to do.")
+        logger.warn(f"{detaching_disk} not an OSD, nothing to do.")
         return
 
     remove_disk_cmd(osd_num)
@@ -143,12 +155,14 @@ def enroll_disks_as_osds(disks: list) -> None:
         available_disks.append(disk)
 
     # pass disks as space separated arguments.
-    add_osd_cmd(" ".join(available_disks))
+    add_batch_osds(available_disks)
 
-def _get_disk_info(disk: str) -> dict:
+def _get_disk_info(disk: str, attribute: str = None) -> dict:
     """Fetches disk info from lsblk as a python dict."""
     try:
         disk_info = json.loads(_run_cmd(["lsblk", f"{disk}", "--json"]))["blockdevices"]
+        if attribute:
+            return disk_info[0][attribute]
         return disk_info[0]
     except subprocess.CalledProcessError as e:
         if "not a block device" in e.stderr:

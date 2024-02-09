@@ -118,7 +118,7 @@ jobs:
       - unit-test
       - build
     name: Juju test
-    runs-on: [self-hosted, xlarge]
+    runs-on: [xlarge]
     steps:
 
       - name: Download charm
@@ -147,7 +147,8 @@ jobs:
       - name: Install MicroCeph charm
         run: |
           date
-          juju deploy -n 3 ~/artifacts/microceph.charm
+          # constraints to deploy on virtual machine.
+          juju deploy -n 3 ~/artifacts/microceph.charm --constraints="virt-type=virtual-machine root-disk=40G mem=8G"
           juju wait-for application microceph --query='name=="microceph" && (status=="active" || status=="idle")'
           date
 

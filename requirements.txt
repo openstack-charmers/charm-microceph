@@ -3,5 +3,6 @@ ops
 pyroute2
 netifaces
 jsonschema
+tenacity
 jinja2
 git+https://opendev.org/openstack/sunbeam-charms/#egg=ops-sunbeam&subdirectory=ops-sunbeam
