@@ -35,7 +35,7 @@ def get_mon_public_addresses() -> list:
         lines = conf_file.readlines()
         for line in lines:
             if "mon host" in line:
-                addrs = line.split(" ")[-1].split(",")
+                addrs = line.strip().split(" ")[-1].split(",")
                 logger.debug(f"Found public addresses {addrs} in conf file.")
                 public_addrs.extend(addrs)
                 break
