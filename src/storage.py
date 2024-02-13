@@ -23,6 +23,7 @@ import itertools
 from subprocess import CalledProcessError, run
 from tenacity import retry, stop_after_attempt, wait_fixed
 
+from ops_sunbeam.guard import guard, BlockedExceptionError
 from ops.charm import (
     CharmBase,
     EventBase,
@@ -65,7 +66,8 @@ class StorageHandler(Object):
     2) *_storage_detaching
     """
 
-    osd_data_path = '/var/snap/microceph/common/data/osd'
+    name = "storage"
+    osd_data_path = "/var/snap/microceph/common/data/osd"
 
     on = MicroCephStorageEvents()
     charm = None
@@ -82,6 +84,7 @@ class StorageHandler(Object):
         super().__init__(charm, name)
         self._stored.set_default(osd_data={})
         self.charm = charm
+        self.name = name
 
         logger.info("TEST: INITIALISED STORAGE INTERFACE")
 
@@ -128,7 +131,10 @@ class StorageHandler(Object):
         logger.info(enroll)
 
         # enrolls available disks with WAL/DB and save osd data.
-        self._enroll_with_wal_db(disk=enroll['disk'], wal=enroll['wal'], db=enroll['db'])
+        with guard(self.charm, self.name):
+            self._enroll_with_wal_db(
+                disk=enroll['disk'], wal=enroll['wal'], db=enroll['db']
+            )
 
     def _on_osd_devices_attached(self, event: StorageAttachedEvent):
         """Event handler for storage attach event."""
@@ -145,7 +151,8 @@ class StorageHandler(Object):
             if not self._get_osd_num(path, 'osd-devices'):
                 enroll.append(path)
 
-        microceph.enroll_disks_as_osds(enroll)
+        with guard(self.charm, self.name):
+            microceph.enroll_disks_as_osds(enroll)
         for device in enroll:
             self._save_osd_data(device)
 
@@ -154,33 +161,33 @@ class StorageHandler(Object):
     def _on_osd_detaching(self, event: StorageDetachingEvent):
         """Event handler for storage detaching event."""
         detaching_disk = event.storage.location.as_posix()
-
-        try:
-            microceph.remove_disk(detaching_disk)
-            self._remove_osd_data(detaching_disk)
-        except CalledProcessError as e:
-            logger.error(e.stderr)
-            osd_num = self._get_osd_num(event.storage.location.as_posix(), event.storage.name)
-            err_str = f"Storage {event.storage.full_id} detached, provide replacement for osd.{osd_num}."
-            logger.warning(err_str)
-            self._trigger_storage_blocked(error_msg=err_str)
+        with guard(self.charm, self.name):
+            try:
+                microceph.remove_disk(detaching_disk)
+                self._remove_osd_data(detaching_disk)
+            except CalledProcessError as e:
+                logger.error(e.stderr)
+                osd_num = self._get_osd_num(event.storage.location.as_posix(), event.storage.name)
+                err_str = f"Storage {event.storage.full_id} detached, provide replacement for osd.{osd_num}."
+                logger.warning(err_str)
+                raise BlockedExceptionError("Storage device lost, data loss is possible.")
 
     def _on_wal_db_detaching(self, event: StorageDetachingEvent):
         """Updates the attached storage devices in state."""
         # check wal/db symlinks in all osds to check if device is being used.
         osd_num = self._get_osd_num(event.storage.location.as_posix(), event.storage.name)
 
-        if osd_num:
-            try:
-                microceph.remove_disk_cmd(osd_num)
-                self._remove_osd_data(self._stored.osd_data[osd_num])
-            except CalledProcessError as e:
-                logger.error(e.stderr)
-                osd_num = self._get_osd_num(event.storage.location.as_posix(), event.storage.name)
-                err_str = f"Storage {event.storage.full_id} detached, provide replacement for osd.{osd_num}."
-                logger.warning(err_str)
-                self._trigger_storage_blocked(error_msg=err_str)
-                return
+        with guard(self.charm, self.name):
+            if osd_num:
+                try:
+                    microceph.remove_disk_cmd(osd_num)
+                    self._remove_osd_data(self._stored.osd_data[osd_num])
+                except CalledProcessError as e:
+                    logger.error(e.stderr)
+                    osd_num = self._get_osd_num(event.storage.location.as_posix(), event.storage.name)
+                    err_str = f"Storage {event.storage.full_id} detached, provide replacement for osd.{osd_num}."
+                    logger.warning(err_str)
+                    raise BlockedExceptionError("Storage device lost, data loss is possible.")
 
     """helpers"""
     def _check_ceph_osds(self, path: str, directive: str = None) -> str:
@@ -245,7 +252,7 @@ class StorageHandler(Object):
         logger.info(f"Incoming Disk {disk}, directive {directive}.")
 
         for k,v in dict(self._stored.osd_data).items():
-            if v[directive] == disk:
+            if v and v[directive] == disk:
                 return k  # key is the stored osd number.
         return None
 
@@ -254,22 +261,25 @@ class StorageHandler(Object):
 
         for key in dict(self._stored.osd_data).keys():
             if key not in osds:
-                dict(self._stored.osd_data).pop(key, None)
+                val = self._stored.osd_data[key]
+                self._stored.osd_data[key] = None
+                logger.info(f"Popped {val}")
 
     def _remove_osd_data(self, disk: str):
         """Remove data for removed OSD."""
         num = -1  # impossible osd number.
         for osd_num, data in dict(self._stored.osd_data).items():
-            if data['disk'] == disk:
+            if data and data['disk'] == disk:
                 num = osd_num
         if num > 0:
-            val = dict(self._stored.osd_data).pop(num, None)
+            val = self._stored.osd_data[num]
+            self._stored.osd_data[num] = None
             logger.info(f"Popped {val}")
 
         logger.info(self._stored.osd_data)
 
     # NOTE(utkarshbhatthere): 'storage-get' sometimes fires before
-    # requestion information is available.
+    # requested information is available.
     @retry(wait=wait_fixed(5), stop=stop_after_attempt(5))
     def juju_storage_get(self, storage_id=None, attribute=None):
         """Get storage attributes"""

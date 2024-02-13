@@ -148,7 +148,7 @@ jobs:
         run: |
           date
           # constraints to deploy on virtual machine.
-          juju deploy -n 3 ~/artifacts/microceph.charm --constraints="virt-type=virtual-machine root-disk=40G mem=8G"
+          juju deploy -n 3 ~/artifacts/microceph.charm --storage osd-devices='4G,1' --constraints="virt-type=virtual-machine root-disk=40G mem=8G"
           juju wait-for application microceph --query='name=="microceph" && (status=="active" || status=="idle")'
           date
 
@@ -157,12 +157,12 @@ jobs:
           set -eux
           juju status
 
-      - name: Add disks
+      - name: Add OSDs with WAL/DB
         run: |
           set -eux
-          juju run microceph/0 add-osd loop-spec=4G,1 --wait=2m
-          juju run microceph/1 add-osd loop-spec=4G,1 --wait=2m
-          juju run microceph/2 add-osd loop-spec=4G,1 --wait=2m
+          add-storage microceph/0 disk='4G,1' wal='2G,1' db='2G,1'
+          add-storage microceph/1 disk='4G,1' wal='2G,1' db='2G,1'
+          add-storage microceph/2 disk='4G,1' wal='2G,1' db='2G,1'
 
       - name: Add and relate RadosGW charm
         run: |
