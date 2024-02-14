@@ -118,7 +118,7 @@ jobs:
       - unit-test
       - build
     name: Juju test
-    runs-on: [self-hosted, xlarge]
+    runs-on: [self-hosted, xxlarge]
     steps:
 
       - name: Download charm
