@@ -24,6 +24,10 @@ from subprocess import CalledProcessError, run
 from tenacity import retry, stop_after_attempt, wait_fixed
 
 from ops_sunbeam.guard import guard, BlockedExceptionError
+from ops.model import (
+    ActiveStatus,
+    MaintenanceStatus,
+)
 from ops.charm import (
     CharmBase,
     EventBase,
@@ -86,8 +90,6 @@ class StorageHandler(Object):
         self.charm = charm
         self.name = name
 
-        logger.info("TEST: INITIALISED STORAGE INTERFACE")
-
         # Attach handlers
         self.framework.observe(
             getattr(charm.on, "osd_devices_storage_attached"), self._on_osd_devices_attached
@@ -96,10 +98,7 @@ class StorageHandler(Object):
             self.framework.observe(getattr(charm.on, f"{key}_storage_attached"), self._on_attached)
 
         # OSD Detaching handlers.
-        for key in ["osd_devices", "disk"]:
-            self.framework.observe(getattr(charm.on, f"{key}_storage_detaching"), self._on_storage_detaching)
-
-        for key in ["wal", "db"]:
+        for key in ["osd_devices", "disk", "wal", "db"]:
             self.framework.observe(getattr(charm.on, f"{key}_storage_detaching"), self._on_storage_detaching)
 
     """handlers"""
@@ -118,7 +117,6 @@ class StorageHandler(Object):
             'db': [],
         }
 
-        logger.info(enroll)
         # filter only storage directives for wal/db and disk.
         accepts = {"disk", "wal", "db"}
         for storage in [x for x in self.juju_storage_list() if any(x.find(id) >= 0 for id in accepts)]:
@@ -128,13 +126,13 @@ class StorageHandler(Object):
             if not self._get_osd_num(storage_path, directive):
                 enroll[directive].append(storage_path)
 
-        logger.info(enroll)
-
         # enrolls available disks with WAL/DB and save osd data.
         with guard(self.charm, self.name):
+            self.charm.status.set(MaintenanceStatus("Enrolling OSDs"))
             self._enroll_with_wal_db(
                 disk=enroll['disk'], wal=enroll['wal'], db=enroll['db']
             )
+            self.charm.status.set(ActiveStatus())
 
     def _on_osd_devices_attached(self, event: StorageAttachedEvent):
         """Event handler for storage attach event."""
@@ -152,26 +150,9 @@ class StorageHandler(Object):
                 enroll.append(path)
 
         with guard(self.charm, self.name):
-            microceph.enroll_disks_as_osds(enroll)
-        for device in enroll:
-            self._save_osd_data(device)
-
-        logger.info(f"Added {enroll} as disk.")
-
-    # def _on_osd_detaching(self, event: StorageDetachingEvent):
-    #     """Event handler for storage detaching event."""
-    #     detaching_disk = event.storage.location.as_posix()
-    #     with guard(self.charm, self.name):
-    #         try:
-    #             # try removing the disk
-    #             microceph.remove_disk(detaching_disk)
-    #             self._remove_osd_data(detaching_disk)
-    #         except CalledProcessError as e:
-    #             # TODO: Clean records of disk from microcluster db.
-    #             osd_num = self._get_osd_num(event.storage.location.as_posix(), event.storage.name)
-    #             err_str = f"Storage {event.storage.full_id} detached, provide replacement for osd.{osd_num}."
-    #             logger.warning(err_str)
-    #             raise BlockedExceptionError("Storage device lost, data loss is possible.")
+            self.charm.status.set(MaintenanceStatus("Enrolling OSDs"))
+            self._enroll_disks_in_batch(enroll)
+            self.charm.status.set(ActiveStatus())
 
     def _on_storage_detaching(self, event: StorageDetachingEvent):
         """Updates the attached storage devices in state."""
@@ -237,6 +218,13 @@ class StorageHandler(Object):
             except CalledProcessError as e:
                 logger.error(e.stderr)
 
+    def _enroll_disks_in_batch(self, disks: list):
+        """Adds requested Disks to Microceph and stored state."""
+        microceph.enroll_disks_as_osds(disks)
+        for disk in disks:
+            self._save_osd_data(disk)
+        logger.debug(f"Added {disks} as OSDs.")
+
     def remove_osd(self, osd: int, force: bool = False):
         """Removes OSD from MicroCeph and from stored state."""
         try:
@@ -266,8 +254,8 @@ class StorageHandler(Object):
         if directive in ["osd-devices", "disk"]:
             directive = "disk"
 
-        logger.info(self._stored.osd_data)
-        logger.info(f"Incoming Disk {disk}, directive {directive}.")
+        logger.debug(self._stored.osd_data)
+        logger.debug(f"Incoming Disk {disk}, directive {directive}.")
 
         for k,v in dict(self._stored.osd_data).items():
             if v and v[directive] == disk:
@@ -282,7 +270,7 @@ class StorageHandler(Object):
             if key not in osds:
                 val = self._stored.osd_data[key]
                 self._stored.osd_data[key] = None
-                logger.info(f"Popped {val}")
+                logger.debug(f"Popped {val}")
 
     def _remove_osd_data(self, disk: str):
         """Remove data for removed OSD."""
@@ -293,9 +281,9 @@ class StorageHandler(Object):
         if num > 0:
             val = self._stored.osd_data[num]
             self._stored.osd_data[num] = None
-            logger.info(f"Popped {val}")
+            logger.debug(f"Popped {val}")
 
-        logger.info(self._stored.osd_data)
+        logger.debug(self._stored.osd_data)
 
     # NOTE(utkarshbhatthere): 'storage-get' sometimes fires before
     # requested information is available.
