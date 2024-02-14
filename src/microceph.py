@@ -114,9 +114,11 @@ def list_disk_cmd() -> dict:
     cmd = ["microceph", "disk", "list", "--json"]
     return json.loads(_run_cmd(cmd))
 
-def remove_disk_cmd(osd_num: int) -> None:
+def remove_disk_cmd(osd_num: int, force: bool = False) -> None:
     """Removes requested OSD."""
     cmd = ["microceph", "disk", "remove", str(osd_num)]
+    if force:
+        cmd.append("--bypass-safety-checks")
     _run_cmd(cmd)
 
 def remove_disk(detaching_disk: str) -> None:

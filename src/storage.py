@@ -192,7 +192,7 @@ class StorageHandler(Object):
                         raise BlockedExceptionError(warning)
 
     """helpers"""
-    def _is_safety_failure(err: str) -> bool:
+    def _is_safety_failure(self, err: str) -> bool:
         """checks if the subprocess error is caused by safety check."""
         return "need at least 3 OSDs" in err
 
@@ -237,7 +237,7 @@ class StorageHandler(Object):
             except CalledProcessError as e:
                 logger.error(e.stderr)
 
-    def remove_osd(self, osd: int, force: bool):
+    def remove_osd(self, osd: int, force: bool = False):
         """Removes OSD from MicroCeph and from stored state."""
         try:
             microceph.remove_disk_cmd(osd, force)

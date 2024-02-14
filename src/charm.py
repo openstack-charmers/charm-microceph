@@ -33,7 +33,7 @@ import ops.framework
 import ops_sunbeam.compound_status as compound_status
 import ops_sunbeam.charm as sunbeam_charm
 import ops_sunbeam.relation_handlers as sunbeam_rhandlers
-from ops.charm import ActionEvent, StorageAttachedEvent, StorageDetachingEvent
+from ops.charm import ActionEvent
 from ops.main import main
 
 import microceph
@@ -190,16 +190,6 @@ class MicroCephCharm(sunbeam_charm.OSBaseOperatorCharm):
         if empty:
             # Inform RadosGW units that there's now an OSD.
             self._notify_radosgw()
-
-    def _on_storage_attached(self, event: StorageAttachedEvent):
-        """Event handler for storage attach event."""
-        logger.debug(f"Storage Info for attach event: {event.storage}")
-        microceph._run_cmd(["lsblk"])
-
-    def _on_storage_detaching(self, event: StorageDetachingEvent):
-        """Event handler for storage detaching event."""
-        logger.debug(f"Storage Info for detaching event: {event.storage}")
-        microceph._run_cmd(["lsblk"])
 
     def _handle_disk_list_output(self, output: str) -> dict:
         # Do not use _ for keys that need to set in action result, instead use -.
