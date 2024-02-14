@@ -37,7 +37,7 @@ def _run_cmd(cmd: list) -> str:
         raise e
 
 
-def _is_ready()-> bool:
+def _is_ready() -> bool:
     """Checks if the microceph snap is installed and bootstrapped/joined."""
     if not SnapCache()["microceph"].present:
         logger.warning("Snap microceph not installed yet.")
@@ -88,7 +88,10 @@ def is_cluster_member(hostname: str) -> bool:
         else:
             raise e
 
+
 """Disk CMDs and Helpers"""
+
+
 def add_osd_cmd(spec: str, wal_dev: str = None, db_dev: str = None) -> None:
     """Executes MicroCeph add osd cmd with provided spec."""
     cmd = ["microceph", "disk", "add", spec]
@@ -97,6 +100,7 @@ def add_osd_cmd(spec: str, wal_dev: str = None, db_dev: str = None) -> None:
     if db_dev:
         cmd.extend(["--db-device", db_dev, "--db-wipe"])
     _run_cmd(cmd)
+
 
 def add_batch_osds(disks: list) -> None:
     """Enroll multiple disks as OSD."""
@@ -109,10 +113,12 @@ def add_batch_osds(disks: list) -> None:
     cmd.extend(disks)
     _run_cmd(cmd)
 
+
 def list_disk_cmd() -> dict:
     """Fetches MicroCeph configured and unpartitioned disks as a dict."""
     cmd = ["microceph", "disk", "list", "--json"]
     return json.loads(_run_cmd(cmd))
+
 
 def remove_disk_cmd(osd_num: int, force: bool = False) -> None:
     """Removes requested OSD."""
@@ -120,6 +126,7 @@ def remove_disk_cmd(osd_num: int, force: bool = False) -> None:
     if force:
         cmd.append("--bypass-safety-checks")
     _run_cmd(cmd)
+
 
 def remove_disk(detaching_disk: str) -> None:
     """Removes Disk if configured as an OSD, does nothing otherwise."""
@@ -142,6 +149,7 @@ def remove_disk(detaching_disk: str) -> None:
 
     remove_disk_cmd(osd_num)
 
+
 def enroll_disks_as_osds(disks: list) -> None:
     """Enrolls the provided block devices as OSDs."""
     if not disks:
@@ -159,6 +167,7 @@ def enroll_disks_as_osds(disks: list) -> None:
     # pass disks as space separated arguments.
     add_batch_osds(available_disks)
 
+
 def _get_disk_info(disk: str, attribute: str = None) -> dict:
     """Fetches disk info from lsblk as a python dict."""
     try:
@@ -171,6 +180,7 @@ def _get_disk_info(disk: str, attribute: str = None) -> dict:
             return None
         else:
             raise e
+
 
 def _is_block_device_enrollable(disk: str) -> bool:
     """Checks if the provided block device is enrollable as an OSD."""

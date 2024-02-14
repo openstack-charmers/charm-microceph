@@ -99,9 +99,12 @@ class StorageHandler(Object):
 
         # OSD Detaching handlers.
         for key in ["osd_devices", "disk", "wal", "db"]:
-            self.framework.observe(getattr(charm.on, f"{key}_storage_detaching"), self._on_storage_detaching)
+            self.framework.observe(
+                getattr(charm.on, f"{key}_storage_detaching"), self._on_storage_detaching
+            )
 
     """handlers"""
+
     def _on_attached(self, event: StorageAttachedEvent):
         """Updates the attached storage devices in state."""
         if not microceph._is_ready():
@@ -112,26 +115,26 @@ class StorageHandler(Object):
         self._clean_stale_osd_data()
 
         enroll = {
-            'disk': [],
-            'wal': [],
-            'db': [],
+            "disk": [],
+            "wal": [],
+            "db": [],
         }
 
         # filter only storage directives for wal/db and disk.
         accepts = {"disk", "wal", "db"}
-        for storage in [x for x in self.juju_storage_list() if any(x.find(id) >= 0 for id in accepts)]:
+        for storage in [
+            x for x in self.juju_storage_list() if any(x.find(id) >= 0 for id in accepts)
+        ]:
             # split storage names of the form disk/0
             directive = "".join(itertools.takewhile(str.isalpha, storage))
-            storage_path = self.juju_storage_get(storage_id=storage, attribute='location')
+            storage_path = self.juju_storage_get(storage_id=storage, attribute="location")
             if not self._get_osd_num(storage_path, directive):
                 enroll[directive].append(storage_path)
 
         # enrolls available disks with WAL/DB and save osd data.
         with guard(self.charm, self.name):
             self.charm.status.set(MaintenanceStatus("Enrolling OSDs"))
-            self._enroll_with_wal_db(
-                disk=enroll['disk'], wal=enroll['wal'], db=enroll['db']
-            )
+            self._enroll_with_wal_db(disk=enroll["disk"], wal=enroll["wal"], db=enroll["db"])
             self.charm.status.set(ActiveStatus())
 
     def _on_osd_devices_attached(self, event: StorageAttachedEvent):
@@ -144,9 +147,9 @@ class StorageHandler(Object):
         self._clean_stale_osd_data()
 
         enroll = []
-        for storage in [device for device in self.juju_storage_list() if 'osd-devices' in device]:
-            path = self.juju_storage_get(storage_id=storage, attribute='location')
-            if not self._get_osd_num(path, 'osd-devices'):
+        for storage in [device for device in self.juju_storage_list() if "osd-devices" in device]:
+            path = self.juju_storage_get(storage_id=storage, attribute="location")
+            if not self._get_osd_num(path, "osd-devices"):
                 enroll.append(path)
 
         with guard(self.charm, self.name):
@@ -173,29 +176,10 @@ class StorageHandler(Object):
                         raise BlockedExceptionError(warning)
 
     """helpers"""
+
     def _is_safety_failure(self, err: str) -> bool:
         """checks if the subprocess error is caused by safety check."""
         return "need at least 3 OSDs" in err
-
-    def _check_ceph_osds(self, path: str, directive: str = None) -> str:
-        """Returns osd num if certain disk is being used for OSDs or wal/db directive."""
-        device = None
-        osd_path = None
-        for osd in [path[0] for path in os.walk(self.osd_data_path)]:
-            try:
-                # osd/block.wal or osd/block.db
-                osd_path = f"{osd}/block"
-                if directive:
-                    osd_path += f".{directive}"
-                device = os.readlink(osd_path)
-                if device == path:
-                    return osd.split('-')[1]
-            except FileNotFoundError:
-                # osd has no wal/db configured.
-                continue
-
-        # impossible osd number
-        return -1
 
     def _run(self, cmd: list) -> str:
         """Wrapper around subprocess run for storage commands."""
@@ -257,7 +241,7 @@ class StorageHandler(Object):
         logger.debug(self._stored.osd_data)
         logger.debug(f"Incoming Disk {disk}, directive {directive}.")
 
-        for k,v in dict(self._stored.osd_data).items():
+        for k, v in dict(self._stored.osd_data).items():
             if v and v[directive] == disk:
                 return k  # key is the stored osd number.
         return None
@@ -276,7 +260,7 @@ class StorageHandler(Object):
         """Remove data for removed OSD."""
         num = -1  # impossible osd number.
         for osd_num, data in dict(self._stored.osd_data).items():
-            if data and data['disk'] == disk:
+            if data and data["disk"] == disk:
                 num = osd_num
         if num > 0:
             val = self._stored.osd_data[num]
@@ -290,9 +274,9 @@ class StorageHandler(Object):
     @retry(wait=wait_fixed(5), stop=stop_after_attempt(10))
     def juju_storage_get(self, storage_id=None, attribute=None):
         """Get storage attributes"""
-        _args = ['storage-get', '--format=json']
+        _args = ["storage-get", "--format=json"]
         if storage_id:
-            _args.extend(('-s', storage_id))
+            _args.extend(("-s", storage_id))
         if attribute:
             _args.append(attribute)
         try:
@@ -302,7 +286,7 @@ class StorageHandler(Object):
 
     def juju_storage_list(self, storage_name=None):
         """List the storage IDs for the unit"""
-        _args = ['storage-list', '--format=json']
+        _args = ["storage-list", "--format=json"]
         if storage_name:
             _args.append(storage_name)
         try:
@@ -311,8 +295,8 @@ class StorageHandler(Object):
             return None
         except OSError as e:
             import errno
+
             if e.errno == errno.ENOENT:
                 # storage-list does not exist
                 return []
             raise
-
