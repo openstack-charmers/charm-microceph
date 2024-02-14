@@ -16,17 +16,11 @@
 
 """Handle Juju Storage Events."""
 
+import itertools
 import json
 import logging
-import itertools
 from subprocess import CalledProcessError, run
-from tenacity import retry, stop_after_attempt, wait_fixed
 
-from ops_sunbeam.guard import guard, BlockedExceptionError
-from ops.model import (
-    ActiveStatus,
-    MaintenanceStatus,
-)
 from ops.charm import (
     CharmBase,
     EventBase,
@@ -36,6 +30,9 @@ from ops.charm import (
     StorageDetachingEvent,
 )
 from ops.framework import Object, StoredState
+from ops.model import ActiveStatus, MaintenanceStatus
+from ops_sunbeam.guard import BlockedExceptionError, guard
+from tenacity import retry, stop_after_attempt, wait_fixed
 
 import microceph
 
