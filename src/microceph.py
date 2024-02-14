@@ -166,7 +166,7 @@ def _get_disk_info(disk: str, attribute: str = None) -> dict:
         return disk_info[0]
     except subprocess.CalledProcessError as e:
         if "not a block device" in e.stderr:
-            return {}
+            return None
         else:
             raise e
 

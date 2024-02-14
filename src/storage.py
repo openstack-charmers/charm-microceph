@@ -97,10 +97,10 @@ class StorageHandler(Object):
 
         # OSD Detaching handlers.
         for key in ["osd_devices", "disk"]:
-            self.framework.observe(getattr(charm.on, f"{key}_storage_detaching"), self._on_osd_detaching)
+            self.framework.observe(getattr(charm.on, f"{key}_storage_detaching"), self._on_storage_detaching)
 
         for key in ["wal", "db"]:
-            self.framework.observe(getattr(charm.on, f"{key}_storage_detaching"), self._on_wal_db_detaching)
+            self.framework.observe(getattr(charm.on, f"{key}_storage_detaching"), self._on_storage_detaching)
 
     """handlers"""
     def _on_attached(self, event: StorageAttachedEvent):
@@ -158,38 +158,44 @@ class StorageHandler(Object):
 
         logger.info(f"Added {enroll} as disk.")
 
-    def _on_osd_detaching(self, event: StorageDetachingEvent):
-        """Event handler for storage detaching event."""
-        detaching_disk = event.storage.location.as_posix()
-        with guard(self.charm, self.name):
-            try:
-                microceph.remove_disk(detaching_disk)
-                self._remove_osd_data(detaching_disk)
-            except CalledProcessError as e:
-                logger.error(e.stderr)
-                osd_num = self._get_osd_num(event.storage.location.as_posix(), event.storage.name)
-                err_str = f"Storage {event.storage.full_id} detached, provide replacement for osd.{osd_num}."
-                logger.warning(err_str)
-                raise BlockedExceptionError("Storage device lost, data loss is possible.")
+    # def _on_osd_detaching(self, event: StorageDetachingEvent):
+    #     """Event handler for storage detaching event."""
+    #     detaching_disk = event.storage.location.as_posix()
+    #     with guard(self.charm, self.name):
+    #         try:
+    #             # try removing the disk
+    #             microceph.remove_disk(detaching_disk)
+    #             self._remove_osd_data(detaching_disk)
+    #         except CalledProcessError as e:
+    #             # TODO: Clean records of disk from microcluster db.
+    #             osd_num = self._get_osd_num(event.storage.location.as_posix(), event.storage.name)
+    #             err_str = f"Storage {event.storage.full_id} detached, provide replacement for osd.{osd_num}."
+    #             logger.warning(err_str)
+    #             raise BlockedExceptionError("Storage device lost, data loss is possible.")
 
-    def _on_wal_db_detaching(self, event: StorageDetachingEvent):
+    def _on_storage_detaching(self, event: StorageDetachingEvent):
         """Updates the attached storage devices in state."""
-        # check wal/db symlinks in all osds to check if device is being used.
+        # check if the wal/db device is being used.
         osd_num = self._get_osd_num(event.storage.location.as_posix(), event.storage.name)
 
-        with guard(self.charm, self.name):
-            if osd_num:
+        # If detaching wal/db disk is used with an OSD.
+        if osd_num:
+            with guard(self.charm, self.name):
                 try:
-                    microceph.remove_disk_cmd(osd_num)
-                    self._remove_osd_data(self._stored.osd_data[osd_num])
+                    self.remove_osd(osd_num)
                 except CalledProcessError as e:
-                    logger.error(e.stderr)
-                    osd_num = self._get_osd_num(event.storage.location.as_posix(), event.storage.name)
-                    err_str = f"Storage {event.storage.full_id} detached, provide replacement for osd.{osd_num}."
-                    logger.warning(err_str)
-                    raise BlockedExceptionError("Storage device lost, data loss is possible.")
+                    if self._is_safety_failure(e.stderr):
+                        warning = f"Storage {event.storage.full_id} detached, provide replacement for osd.{osd_num}."
+                        logger.warning(warning)
+                        # clean records from microceph db, since juju will deprovision storage device.
+                        self.remove_osd(osd_num, force=True)
+                        raise BlockedExceptionError(warning)
 
     """helpers"""
+    def _is_safety_failure(err: str) -> bool:
+        """checks if the subprocess error is caused by safety check."""
+        return "need at least 3 OSDs" in err
+
     def _check_ceph_osds(self, path: str, directive: str = None) -> str:
         """Returns osd num if certain disk is being used for OSDs or wal/db directive."""
         device = None
@@ -231,11 +237,22 @@ class StorageHandler(Object):
             except CalledProcessError as e:
                 logger.error(e.stderr)
 
+    def remove_osd(self, osd: int, force: bool):
+        """Removes OSD from MicroCeph and from stored state."""
+        try:
+            microceph.remove_disk_cmd(osd, force)
+            self._remove_osd_data(self._stored.osd_data[osd])
+        except CalledProcessError as e:
+            if force:
+                # clean stored state.
+                self._remove_osd_data(self._stored.osd_data[osd])
+            raise e
+
     def _save_osd_data(self, disk: str, wal: str = None, db: str = None):
         """Save OSD data."""
         for osd in microceph.list_disk_cmd()["ConfiguredDisks"]:
             # e.g. check 'vdd' in '/dev/vdd'
-            if microceph._get_disk_info(osd["path"], "name") in disk:
+            if str(microceph._get_disk_info(osd["path"], "name")) in disk:
                 self._stored.osd_data[osd["osd"]] = {
                     "disk_by_id": osd["path"],
                     "disk": disk,
@@ -245,6 +262,7 @@ class StorageHandler(Object):
 
     def _get_osd_num(self, disk, directive):
         """Fetch the OSD number of consuming OSD, None is not used as OSD."""
+        # both osd-devices and disks are used as OSD disks.
         if directive in ["osd-devices", "disk"]:
             directive = "disk"
 
@@ -257,6 +275,7 @@ class StorageHandler(Object):
         return None
 
     def _clean_stale_osd_data(self):
+        """Compare with disk list and remove stale entries."""
         osds = [osd["osd"] for osd in microceph.list_disk_cmd()["ConfiguredDisks"]]
 
         for key in dict(self._stored.osd_data).keys():
@@ -280,7 +299,7 @@ class StorageHandler(Object):
 
     # NOTE(utkarshbhatthere): 'storage-get' sometimes fires before
     # requested information is available.
-    @retry(wait=wait_fixed(5), stop=stop_after_attempt(5))
+    @retry(wait=wait_fixed(5), stop=stop_after_attempt(10))
     def juju_storage_get(self, storage_id=None, attribute=None):
         """Get storage attributes"""
         _args = ['storage-get', '--format=json']
