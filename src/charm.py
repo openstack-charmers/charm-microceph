@@ -30,11 +30,9 @@ import charms.operator_libs_linux.v2.snap as snap
 import netifaces
 import ops.framework
 import ops_sunbeam.charm as sunbeam_charm
-import ops_sunbeam.compound_status as compound_status
 import ops_sunbeam.relation_handlers as sunbeam_rhandlers
 from ops.charm import ActionEvent
 from ops.main import main
-from ops.model import BlockedStatus
 
 import microceph
 from ceph import get_osd_count
@@ -46,7 +44,7 @@ from relation_handlers import (
     MicroClusterNodeAddedEvent,
     MicroClusterPeerHandler,
 )
-from storage import StorageBlockedEvent, StorageHandler
+from storage import StorageHandler
 
 logger = logging.getLogger(__name__)
 
@@ -67,10 +65,6 @@ class MicroCephCharm(sunbeam_charm.OSBaseOperatorCharm):
         self.framework.observe(self.on.list_disks_action, self._list_disks_action)
         self.framework.observe(self.on.add_osd_action, self._add_osd_action)
         self.framework.observe(self.on.stop, self._on_stop)
-        self.framework.observe(self.storage.on.storage_blocked, self._on_storage_blocked)
-
-        # workload priority is 100.
-        self.disk_status = compound_status.Status('Disk', 120)
 
     def _on_install(self, event: ops.framework.EventBase) -> None:
         config = self.model.config.get

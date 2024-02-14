@@ -21,14 +21,7 @@ import json
 import logging
 from subprocess import CalledProcessError, run
 
-from ops.charm import (
-    CharmBase,
-    EventBase,
-    EventSource,
-    ObjectEvents,
-    StorageAttachedEvent,
-    StorageDetachingEvent,
-)
+from ops.charm import CharmBase, StorageAttachedEvent, StorageDetachingEvent
 from ops.framework import Object, StoredState
 from ops.model import ActiveStatus, MaintenanceStatus
 from ops_sunbeam.guard import BlockedExceptionError, guard
@@ -37,25 +30,6 @@ from tenacity import retry, stop_after_attempt, wait_fixed
 import microceph
 
 logger = logging.getLogger(__name__)
-
-
-class StorageBlockedEvent(EventBase):
-    """Storage Event for the charm to observe."""
-
-    # msg used by charm to set the status.
-    msg = ""
-
-    # snapshot/restore methods are not being used since
-    # event data is not needed to persist deferrals.
-    def __init__(self, handle, msg: str):
-        super().__init__(handle)
-        self.msg = msg
-
-
-class MicroCephStorageEvents(ObjectEvents):
-    """Events related to MicroCluster apps."""
-
-    storage_blocked = EventSource(StorageBlockedEvent)
 
 
 class StorageHandler(Object):
@@ -69,7 +43,6 @@ class StorageHandler(Object):
     name = "storage"
     osd_data_path = "/var/snap/microceph/common/data/osd"
 
-    on = MicroCephStorageEvents()
     charm = None
     """
         osd_data: type dict"
@@ -182,10 +155,6 @@ class StorageHandler(Object):
         process = run(cmd, capture_output=True, text=True, check=True, timeout=180)
         logger.debug(f"Command {' '.join(cmd)} finished; Output: {process.stdout}")
         return process.stdout
-
-    def _trigger_storage_blocked(self, error_msg: str) -> None:
-        """Triggers the storage updated event with provided dict as arguments."""
-        self.on.storage_blocked.emit(msg=error_msg)
 
     def _enroll_with_wal_db(self, disk: list, wal: list, db: list):
         """Checks if sufficient devices are available to be enrolled into OSDs."""
