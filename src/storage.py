@@ -16,7 +16,6 @@
 
 """Handle Juju Storage Events."""
 
-import os
 import json
 import logging
 import itertools
@@ -171,14 +170,14 @@ class StorageHandler(Object):
                     if self._is_safety_failure(e.stderr):
                         warning = f"Storage {event.storage.full_id} detached, provide replacement for osd.{osd_num}."
                         logger.warning(warning)
-                        # clean records from microceph db, since juju will deprovision storage device.
+                        # clean records since juju will deprovision device.
                         self.remove_osd(osd_num, force=True)
                         raise BlockedExceptionError(warning)
 
     """helpers"""
 
     def _is_safety_failure(self, err: str) -> bool:
-        """checks if the subprocess error is caused by safety check."""
+        """Checks if the subprocess error is caused by safety check."""
         return "need at least 3 OSDs" in err
 
     def _run(self, cmd: list) -> str:
@@ -273,7 +272,7 @@ class StorageHandler(Object):
     # requested information is available.
     @retry(wait=wait_fixed(5), stop=stop_after_attempt(10))
     def juju_storage_get(self, storage_id=None, attribute=None):
-        """Get storage attributes"""
+        """Get storage attributes."""
         _args = ["storage-get", "--format=json"]
         if storage_id:
             _args.extend(("-s", storage_id))
@@ -285,7 +284,7 @@ class StorageHandler(Object):
             return None
 
     def juju_storage_list(self, storage_name=None):
-        """List the storage IDs for the unit"""
+        """List the storage IDs for the unit."""
         _args = ["storage-list", "--format=json"]
         if storage_name:
             _args.append(storage_name)
