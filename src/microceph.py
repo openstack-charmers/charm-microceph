@@ -141,9 +141,7 @@ def remove_disk(detaching_disk: str) -> None:
         if _get_disk_info(disk["path"])["name"] in detaching_disk:
             osd_num = disk["osd"]
             break
-
-    # Not enrolled as OSD.
-    if osd_num < 0:
+    else:
         logger.warn(f"{detaching_disk} not an OSD, nothing to do.")
         return
 

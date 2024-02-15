@@ -168,7 +168,7 @@ jobs:
           set -x
           juju remove-unit microceph/2 --no-prompt
           # wait and check if the unit is still present.
-          for i in $(seq 1 8); do
+          for i in $(seq 1 20); do
             res=$( ( juju status | grep -cF "microceph/2" ) || true )
             if [[ $res -gt 0 ]] ; then
               echo -n '.'
@@ -232,6 +232,7 @@ jobs:
           set -eux
           juju detach-storage osd-devices/0
           juju wait-for application microceph --query='name=="microceph" && (status=="blocked")'
+          juju debug-log
           juju status
           date
 

@@ -104,7 +104,7 @@ class StorageHandler(Object):
         with guard(self.charm, self.name):
             self.charm.status.set(MaintenanceStatus("Enrolling OSDs"))
             self._enroll_with_wal_db(disk=enroll["disk"], wal=enroll["wal"], db=enroll["db"])
-            self.charm.status.set(ActiveStatus())
+            self.charm.status.set(ActiveStatus("charm is ready"))
 
     def _on_osd_devices_attached(self, event: StorageAttachedEvent):
         """Event handler for storage attach event."""
@@ -124,7 +124,7 @@ class StorageHandler(Object):
         with guard(self.charm, self.name):
             self.charm.status.set(MaintenanceStatus("Enrolling OSDs"))
             self._enroll_disks_in_batch(enroll)
-            self.charm.status.set(ActiveStatus())
+            self.charm.status.set(ActiveStatus("charm is ready"))
 
     def _on_storage_detaching(self, event: StorageDetachingEvent):
         """Updates the attached storage devices in state."""
@@ -200,7 +200,7 @@ class StorageHandler(Object):
     def _get_osd_num(self, disk, directive):
         """Fetch the OSD number of consuming OSD, None is not used as OSD."""
         # both osd-devices and disks are used as OSD disks.
-        if directive in ["osd-devices", "disk"]:
+        if directive == "osd-devices":
             directive = "disk"
 
         logger.debug(self._stored.osd_data)
