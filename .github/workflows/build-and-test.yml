@@ -46,7 +46,7 @@ jobs:
           charmcraft pack -v
           ./rename.sh
       - name: Upload built charm
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: charms
           path: "*.charm"
