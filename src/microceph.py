@@ -19,9 +19,6 @@
 import json
 import logging
 import subprocess
-from socket import gethostname
-
-from charms.operator_libs_linux.v2.snap import SnapCache
 
 logger = logging.getLogger(__name__)
 
@@ -35,19 +32,6 @@ def _run_cmd(cmd: list) -> str:
     except subprocess.CalledProcessError as e:
         logger.error(f"Failed executing cmd: {cmd}, error: {e.stderr}")
         raise e
-
-
-def _is_ready() -> bool:
-    """Checks if the microceph snap is installed and bootstrapped/joined."""
-    if not SnapCache()["microceph"].present:
-        logger.warning("Snap microceph not installed yet.")
-        return False
-
-    if not is_cluster_member(gethostname()):
-        logger.warning("Microceph not bootstrapped yet.")
-        return False
-
-    return True
 
 
 def remove_cluster_member(name: str, is_force: bool) -> None:
@@ -128,26 +112,6 @@ def remove_disk_cmd(osd_num: int, force: bool = False) -> None:
     _run_cmd(cmd)
 
 
-def remove_disk(detaching_disk: str) -> None:
-    """Removes Disk if configured as an OSD, does nothing otherwise."""
-    disks = list_disk_cmd()["ConfiguredDisks"]
-
-    logger.info(f"Detaching Disk: {detaching_disk}, and Configured Disks:{disks}")
-
-    # Find the OSD number.
-    osd_num = -1  # impossible default.
-    for disk in disks:
-        # e.g. check "vdd" in "/dev/vdd"
-        if _get_disk_info(disk["path"])["name"] in detaching_disk:
-            osd_num = disk["osd"]
-            break
-    else:
-        logger.warn(f"{detaching_disk} not an OSD, nothing to do.")
-        return
-
-    remove_disk_cmd(osd_num)
-
-
 def enroll_disks_as_osds(disks: list) -> None:
     """Enrolls the provided block devices as OSDs."""
     if not disks:
@@ -166,16 +130,14 @@ def enroll_disks_as_osds(disks: list) -> None:
     add_batch_osds(available_disks)
 
 
-def _get_disk_info(disk: str, attribute: str = None) -> dict:
+def _get_disk_info(disk: str) -> dict:
     """Fetches disk info from lsblk as a python dict."""
     try:
-        disk_info = json.loads(_run_cmd(["lsblk", f"{disk}", "--json"]))["blockdevices"]
-        if attribute:
-            return disk_info[0][attribute]
+        disk_info = json.loads(_run_cmd(["lsblk", disk, "--json"]))["blockdevices"]
         return disk_info[0]
     except subprocess.CalledProcessError as e:
         if "not a block device" in e.stderr:
-            return None
+            return {}
         else:
             raise e
 
@@ -184,11 +146,11 @@ def _is_block_device_enrollable(disk: str) -> bool:
     """Checks if the provided block device is enrollable as an OSD."""
     device = _get_disk_info(disk)
 
-    if len(device) == 0:
+    if not device:
         return False
 
     # the json interpretation of [null] -> [None].
-    if None not in device["mountpoints"]:
+    if device["mountpoints"] != [None]:
         logger.warning(f"Disk {disk} has mounts.")
         return False
 

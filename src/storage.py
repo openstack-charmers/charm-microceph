@@ -16,15 +16,14 @@
 
 """Handle Juju Storage Events."""
 
-import itertools
 import json
 import logging
 from subprocess import CalledProcessError, run
 
+import ops_sunbeam.guard as sunbeam_guard
 from ops.charm import CharmBase, StorageAttachedEvent, StorageDetachingEvent
 from ops.framework import Object, StoredState
 from ops.model import ActiveStatus, MaintenanceStatus
-from ops_sunbeam.guard import BlockedExceptionError, guard
 from tenacity import retry, stop_after_attempt, wait_fixed
 
 import microceph
@@ -45,7 +44,7 @@ class StorageHandler(Object):
 
     charm = None
     """
-        osd_data: type dict"
+..        osd_data: dict of dicts with int (osd num) key
             disk_by_id: OSD disk by id
             disk: OSD disk path
             wal: wal disk path
@@ -61,22 +60,22 @@ class StorageHandler(Object):
 
         # Attach handlers
         self.framework.observe(
-            getattr(charm.on, "osd_devices_storage_attached"), self._on_osd_devices_attached
+            charm.on["osd_devices"].storage_attached, self._on_osd_devices_attached
         )
-        for key in ["disk", "wal", "db"]:
-            self.framework.observe(getattr(charm.on, f"{key}_storage_attached"), self._on_attached)
+        for directive in ["disk", "wal", "db"]:
+            self.framework.observe(charm.on[directive].storage_attached, self._on_attached)
 
         # OSD Detaching handlers.
-        for key in ["osd_devices", "disk", "wal", "db"]:
+        for directive in ["osd_devices", "disk", "wal", "db"]:
             self.framework.observe(
-                getattr(charm.on, f"{key}_storage_detaching"), self._on_storage_detaching
+                charm.on[directive].storage_detaching, self._on_storage_detaching
             )
 
-    """handlers"""
+    # storage event handlers
 
     def _on_attached(self, event: StorageAttachedEvent):
-        """Updates the attached storage devices in state."""
-        if not microceph._is_ready():
+        """Storage attached handler for disk/wal/db devices."""
+        if not self.charm.ready_for_service():
             logger.warning("MicroCeph not ready yet, deferring storage event.")
             event.defer()
             return
@@ -89,26 +88,23 @@ class StorageHandler(Object):
             "db": [],
         }
 
-        # filter only storage directives for wal/db and disk.
-        accepts = {"disk", "wal", "db"}
-        for storage in [
-            x for x in self.juju_storage_list() if any(x.find(id) >= 0 for id in accepts)
-        ]:
-            # split storage names of the form disk/0
-            directive = "".join(itertools.takewhile(str.isalpha, storage))
+        # filter storage for wal/db and disk directives only.
+        for storage in self._fetch_filtered_storages(["disk", "wal", "db"]):
+            # split storage names of the form disk/n, wal/n or db/n
+            directive = storage.split("/")[0]
             storage_path = self.juju_storage_get(storage_id=storage, attribute="location")
             if not self._get_osd_num(storage_path, directive):
                 enroll[directive].append(storage_path)
 
         # enrolls available disks with WAL/DB and save osd data.
-        with guard(self.charm, self.name):
+        with sunbeam_guard.guard(self.charm, self.name):
             self.charm.status.set(MaintenanceStatus("Enrolling OSDs"))
             self._enroll_with_wal_db(disk=enroll["disk"], wal=enroll["wal"], db=enroll["db"])
             self.charm.status.set(ActiveStatus("charm is ready"))
 
     def _on_osd_devices_attached(self, event: StorageAttachedEvent):
-        """Event handler for storage attach event."""
-        if not microceph._is_ready():
+        """Storage attached handler for osd-devices."""
+        if not self.charm.ready_for_service():
             logger.warning("MicroCeph not ready yet, deferring storage event.")
             event.defer()
             return
@@ -116,24 +112,23 @@ class StorageHandler(Object):
         self._clean_stale_osd_data()
 
         enroll = []
-        for storage in [device for device in self.juju_storage_list() if "osd-devices" in device]:
+        for storage in self._fetch_filtered_storages(["osd-devices"]):
             path = self.juju_storage_get(storage_id=storage, attribute="location")
             if not self._get_osd_num(path, "osd-devices"):
                 enroll.append(path)
 
-        with guard(self.charm, self.name):
+        with sunbeam_guard.guard(self.charm, self.name):
             self.charm.status.set(MaintenanceStatus("Enrolling OSDs"))
             self._enroll_disks_in_batch(enroll)
             self.charm.status.set(ActiveStatus("charm is ready"))
 
     def _on_storage_detaching(self, event: StorageDetachingEvent):
-        """Updates the attached storage devices in state."""
-        # check if the wal/db device is being used.
+        """Unified storage detaching handler."""
+        # check if the detaching device is being used as or with an OSD.
         osd_num = self._get_osd_num(event.storage.location.as_posix(), event.storage.name)
 
-        # If detaching wal/db disk is used with an OSD.
         if osd_num:
-            with guard(self.charm, self.name):
+            with sunbeam_guard.guard(self.charm, self.name):
                 try:
                     self.remove_osd(osd_num)
                 except CalledProcessError as e:
@@ -142,9 +137,18 @@ class StorageHandler(Object):
                         logger.warning(warning)
                         # clean records since juju will deprovision device.
                         self.remove_osd(osd_num, force=True)
-                        raise BlockedExceptionError(warning)
+                        raise sunbeam_guard.BlockedExceptionError(warning)
 
-    """helpers"""
+    # helper functions
+
+    def _fetch_filtered_storages(self, directives: list) -> list:
+        """Provides a filtered list of attached storage devices."""
+        filtered = []
+        for device in self.juju_storage_list():
+            if device.split("/")[0] in directives:
+                filtered.append(device)
+
+        return filtered
 
     def _is_safety_failure(self, err: str) -> bool:
         """Checks if the subprocess error is caused by safety check."""
@@ -188,8 +192,15 @@ class StorageHandler(Object):
     def _save_osd_data(self, disk: str, wal: str = None, db: str = None):
         """Save OSD data."""
         for osd in microceph.list_disk_cmd()["ConfiguredDisks"]:
+            # get block device info using /dev/disk-by-id and lsblk.
+            local_device = microceph._get_disk_info(osd["path"])
+
+            # OSD not configured on current unit.
+            if not local_device:
+                continue
+
             # e.g. check 'vdd' in '/dev/vdd'
-            if str(microceph._get_disk_info(osd["path"], "name")) in disk:
+            if local_device["name"] in disk:
                 self._stored.osd_data[osd["osd"]] = {
                     "disk_by_id": osd["path"],
                     "disk": disk,

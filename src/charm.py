@@ -140,13 +140,6 @@ class MicroCephCharm(sunbeam_charm.OSBaseOperatorCharm):
         finally:
             self.radosgw.force = False
 
-    def _on_storage_blocked(self, event: StorageBlockedEvent):
-        """Handler for storage updated event."""
-        logger.error(event.msg)
-        self.status.set(
-            BlockedStatus(event.msg)
-        )
-
     def _add_osd_action(self, event: ActionEvent):
         """Add OSD disks to microceph."""
         if not self.peers.interface.state.joined:
@@ -251,10 +244,16 @@ class MicroCephCharm(sunbeam_charm.OSBaseOperatorCharm):
     def ready_for_service(self) -> bool:
         """Check if service is ready or not."""
         # TODO(hemanth): check ceph quorum
-        if self.bootstrapped:
-            return True
+        if not snap.SnapCache()["microceph"].present:
+            logger.warning("Snap microceph not installed yet.")
+            return False
 
-        return False
+        if not microceph.is_cluster_member(gethostname()):
+            logger.warning("Microceph not bootstrapped yet.")
+            return False
+
+        # ready for service if leader has been announced.
+        return self.is_leader_ready()
 
     def _lookup_system_interfaces(self, mon_hosts: list) -> str:
         """Looks up available addresses on the machine and returns addr if found in mon_hosts."""
