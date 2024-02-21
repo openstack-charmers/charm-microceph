@@ -39,6 +39,19 @@ Add the disks on each node
 
     juju run microceph/0 add-osd <DISK PATH>,<DISK PATH>
 
+## Storage
+
+The microceph charm can take advantage of Juju storage devices automatically
+enrolling disks as standalone OSDs or with dedicated WAL/DB devices.
+
+For (say) 4 standalone OSDs on unit microceph/n.
+
+    juju add-storage microceph/n osd-devices='cinder,10G,4'
+
+For OSDs with dedicated WAL/DB devices.
+
+    juju add-storage microceph/n disk='cinder,10G,4' wal='cinder,2G,4' db='cinder,2G,4'
+
 ## Actions
 
 This section lists Juju [actions][juju-docs-actions] supported by the charm.
