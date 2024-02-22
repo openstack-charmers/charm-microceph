@@ -1,4 +1,4 @@
 options:
   snap-channel:
-    default: "reef/edge"
+    default: "latest/edge/increasedTimeout"
     type: string
