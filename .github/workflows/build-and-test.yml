@@ -134,6 +134,8 @@ jobs:
 
       - name: Setup LXD
         uses: canonical/setup-lxd@v0.1.1
+        with:
+          channel: 5.18/stable
 
       - name: Install dependencies
         run: |
@@ -207,6 +209,8 @@ jobs:
 
       - name: Setup LXD
         uses: canonical/setup-lxd@v0.1.1
+        with:
+          channel: 5.18/stable
 
       - name: Install dependencies
         run: |
@@ -224,7 +228,7 @@ jobs:
           juju deploy ~/artifacts/microceph.charm --storage osd-devices='4G,3' --constraints="virt-type=virtual-machine root-disk=40G mem=8G"
           # wait for charm to bootstrap and OSD devices to enroll.
           juju wait-for unit microceph/0 --query='workload-message=="(workload) charm is ready"'
-          osd_count=$(sudo microceph disk list --json | jq '.ConfiguredDisks | length')
+          osd_count=$(juju exec --unit microceph/0 -- microceph disk list --json | jq '.ConfiguredDisks | length')
           if [[ $osd_count -ne 3 ]] ; then
             echo "Expected OSDs 3, Actual ${osd_count}"
             break 1
@@ -237,7 +241,7 @@ jobs:
           set -eux
           juju detach-storage osd-devices/0
           juju wait-for unit microceph/0 --query='workload-status=="blocked"'
-          osd_count=$(sudo microceph disk list --json | jq '.ConfiguredDisks | length')
+          osd_count=$(juju exec --unit microceph/0 -- microceph disk list --json | jq '.ConfiguredDisks | length')
           if [[ $osd_count -ne 2 ]] ; then
             echo "Expected OSDs 2, Actual ${osd_count}"
             break 1
@@ -250,7 +254,7 @@ jobs:
           set -eux
           juju add-storage microceph/0 disk='4G,1' wal='2G,1' db='2G,1'
           juju wait-for unit microceph/0 --query='workload-message=="(workload) charm is ready"'
-          osd_count=$(sudo microceph disk list --json | jq '.ConfiguredDisks | length')
+          osd_count=$(juju exec --unit microceph/0 -- microceph disk list --json | jq '.ConfiguredDisks | length')
           if [[ $osd_count -ne 3 ]] ; then
             echo "Expected OSDs 3, Actual ${osd_count}"
             break 1

@@ -1,5 +1,4 @@
 options:
   snap-channel:
-    # TODO: Revert once suitable promotions to stable
-    default: "latest/edge/automountobserve"
+    default: "reef/edge"
     type: string
