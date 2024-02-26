@@ -40,17 +40,20 @@ class StorageHandler(Object):
     """
 
     name = "storage"
-    osd_data_path = "/var/snap/microceph/common/data/osd"
+
+    # storage directive names
+    standalone = "osd-standalone"
+    dedicated_db = "osd-dedicated-db"
 
     charm = None
-    """
-..        osd_data: dict of dicts with int (osd num) key
-            disk_by_id: OSD disk by id
-            disk: OSD disk path
-            wal: wal disk path
-            db: db disk path
-    """
     _stored = StoredState()
+    """
+        _stored: per unit stored state for storage class.
+..        osd_data: dict of dicts with int (osd num) key
+            disk_by_id: OSD disk by id (unique)
+            disk: OSD disk storage name (unique)
+            db: db disk storage name (unique)
+    """
 
     def __init__(self, charm: CharmBase, name="storage"):
         super().__init__(charm, name)
@@ -60,13 +63,18 @@ class StorageHandler(Object):
 
         # Attach handlers
         self.framework.observe(
-            charm.on["osd_devices"].storage_attached, self._on_osd_devices_attached
+            charm.on[self.standalone.replace("-", "_")].storage_attached,
+            self._on_osd_standalone_attached,
         )
-        for directive in ["disk", "wal", "db"]:
+        for directive in [self.dedicated_db.replace("-", "_"), "db"]:
             self.framework.observe(charm.on[directive].storage_attached, self._on_attached)
 
         # OSD Detaching handlers.
-        for directive in ["osd_devices", "disk", "wal", "db"]:
+        for directive in [
+            self.standalone.replace("-", "_"),
+            self.dedicated_db.replace("-", "_"),
+            "db",
+        ]:
             self.framework.observe(
                 charm.on[directive].storage_detaching, self._on_storage_detaching
             )
@@ -74,7 +82,7 @@ class StorageHandler(Object):
     # storage event handlers
 
     def _on_attached(self, event: StorageAttachedEvent):
-        """Storage attached handler for disk/wal/db devices."""
+        """Storage attached handler for osd-dedicated-db/db devices."""
         if not self.charm.ready_for_service():
             logger.warning("MicroCeph not ready yet, deferring storage event.")
             event.defer()
@@ -83,27 +91,24 @@ class StorageHandler(Object):
         self._clean_stale_osd_data()
 
         enroll = {
-            "disk": [],
-            "wal": [],
+            self.dedicated_db: [],
             "db": [],
         }
 
-        # filter storage for wal/db and disk directives only.
-        for storage in self._fetch_filtered_storages(["disk", "wal", "db"]):
-            # split storage names of the form disk/n, wal/n or db/n
-            directive = storage.split("/")[0]
-            storage_path = self.juju_storage_get(storage_id=storage, attribute="location")
-            if not self._get_osd_num(storage_path, directive):
-                enroll[directive].append(storage_path)
+        # filter storage for osd-dedicated-db and db directives only.
+        for storage in self._fetch_filtered_storages([self.dedicated_db, "db"]):
+            if not self._get_osd_id(storage):
+                # split storage names of the form osd-dedicated-db/n or db/n
+                enroll[storage.split("/")[0]].append(storage)
 
-        # enrolls available disks with WAL/DB and save osd data.
+        # enrolls available disks with DB and save osd data.
         with sunbeam_guard.guard(self.charm, self.name):
             self.charm.status.set(MaintenanceStatus("Enrolling OSDs"))
-            self._enroll_with_wal_db(disk=enroll["disk"], wal=enroll["wal"], db=enroll["db"])
+            self._enroll_with_db(disks=enroll[self.dedicated_db], dbs=enroll["db"])
             self.charm.status.set(ActiveStatus("charm is ready"))
 
-    def _on_osd_devices_attached(self, event: StorageAttachedEvent):
-        """Storage attached handler for osd-devices."""
+    def _on_osd_standalone_attached(self, event: StorageAttachedEvent):
+        """Storage attached handler for osd-standalone."""
         if not self.charm.ready_for_service():
             logger.warning("MicroCeph not ready yet, deferring storage event.")
             event.defer()
@@ -112,10 +117,9 @@ class StorageHandler(Object):
         self._clean_stale_osd_data()
 
         enroll = []
-        for storage in self._fetch_filtered_storages(["osd-devices"]):
-            path = self.juju_storage_get(storage_id=storage, attribute="location")
-            if not self._get_osd_num(path, "osd-devices"):
-                enroll.append(path)
+        for storage in self._fetch_filtered_storages([self.standalone]):
+            if not self._get_osd_id(name=storage):
+                enroll.append(storage)
 
         with sunbeam_guard.guard(self.charm, self.name):
             self.charm.status.set(MaintenanceStatus("Enrolling OSDs"))
@@ -124,8 +128,8 @@ class StorageHandler(Object):
 
     def _on_storage_detaching(self, event: StorageDetachingEvent):
         """Unified storage detaching handler."""
-        # check if the detaching device is being used as or with an OSD.
-        osd_num = self._get_osd_num(event.storage.location.as_posix(), event.storage.name)
+        # check if the detaching device (of the form directive/index) is being used as or with an OSD.
+        osd_num = self._get_osd_id(event.storage.full_id)
 
         if osd_num:
             with sunbeam_guard.guard(self.charm, self.name):
@@ -135,7 +139,7 @@ class StorageHandler(Object):
                     if self._is_safety_failure(e.stderr):
                         warning = f"Storage {event.storage.full_id} detached, provide replacement for osd.{osd_num}."
                         logger.warning(warning)
-                        # clean records since juju will deprovision device.
+                        # forcefully remove OSD and entry from stored state because Juju will deprovision storage.
                         self.remove_osd(osd_num, force=True)
                         raise sunbeam_guard.BlockedExceptionError(warning)
 
@@ -160,37 +164,48 @@ class StorageHandler(Object):
         logger.debug(f"Command {' '.join(cmd)} finished; Output: {process.stdout}")
         return process.stdout
 
-    def _enroll_with_wal_db(self, disk: list, wal: list, db: list):
+    def _enroll_with_db(self, disks: list, dbs: list):
         """Checks if sufficient devices are available to be enrolled into OSDs."""
-        enrollment_count = min(len(disk), len(wal), len(db))
+        enrollment_count = min(len(disks), len(dbs))
         for i in range(enrollment_count):
             try:
-                microceph.add_osd_cmd(disk[i], wal[i], db[i])
+                microceph.add_osd_cmd(
+                    spec=self.juju_storage_get(storage_id=disks[i], attribute="location"),
+                    db_dev=self.juju_storage_get(storage_id=dbs[i], attribute="location"),
+                )
                 # store configured devices.
-                self._save_osd_data(disk=disk[i], wal=wal[i], db=db[i])
+                self._save_osd_data(disk_name=disks[i], db_name=dbs[i])
             except CalledProcessError as e:
                 logger.error(e.stderr)
 
     def _enroll_disks_in_batch(self, disks: list):
         """Adds requested Disks to Microceph and stored state."""
-        microceph.enroll_disks_as_osds(disks)
+        # Enroll OSDs
+        disk_paths = map(
+            lambda name: self.juju_storage_get(storage_id=name, attribute="location"), disks
+        )
+        microceph.enroll_disks_as_osds(disk_paths)
+
+        # Save OSD data using storage names.
         for disk in disks:
             self._save_osd_data(disk)
-        logger.debug(f"Added {disks} as OSDs.")
 
-    def remove_osd(self, osd: int, force: bool = False):
+    def remove_osd(self, osd_num: int, force: bool = False):
         """Removes OSD from MicroCeph and from stored state."""
         try:
-            microceph.remove_disk_cmd(osd, force)
-            self._remove_osd_data(self._stored.osd_data[osd])
+            microceph.remove_disk_cmd(osd_num, force)
+            # if no errors while removing OSD, clean stale osd records.
+            self._clean_stale_osd_data()
         except CalledProcessError as e:
             if force:
-                # clean stored state.
-                self._remove_osd_data(self._stored.osd_data[osd])
+                # If forced removal was done, clean stale osd records.
+                self._clean_stale_osd_data()
             raise e
 
-    def _save_osd_data(self, disk: str, wal: str = None, db: str = None):
-        """Save OSD data."""
+    def _save_osd_data(self, disk_name: str, db_name: str = None):
+        """Save OSD data using juju storage names."""
+        disk_path = self.juju_storage_get(storage_id=disks[i], attribute="location")
+
         for osd in microceph.list_disk_cmd()["ConfiguredDisks"]:
             # get block device info using /dev/disk-by-id and lsblk.
             local_device = microceph._get_disk_info(osd["path"])
@@ -200,25 +215,28 @@ class StorageHandler(Object):
                 continue
 
             # e.g. check 'vdd' in '/dev/vdd'
-            if local_device["name"] in disk:
+            if local_device["name"] in disk_path:
+                logger.debug(f"Added OSD {osd['osd']} with Disk {disk_name}, DB {db_name}")
                 self._stored.osd_data[osd["osd"]] = {
-                    "disk_by_id": osd["path"],
-                    "disk": disk,
-                    "wal": wal,
-                    "db": db,
+                    "disk_by_id": osd["path"],  # /dev/disk-by-id/ for OSD device.
+                    "disk": disk_name,  # storage name for OSD device.
+                    "db": db_name,  # storage name for DB device.
                 }
 
-    def _get_osd_num(self, disk, directive):
+    def _get_osd_id(self, name: str):
         """Fetch the OSD number of consuming OSD, None is not used as OSD."""
-        # both osd-devices and disks are used as OSD disks.
-        if directive == "osd-devices":
+        # storage name is of the form db/3 or osd-standalone/2 etc.
+        directive = name.split("/")[0]
+
+        if directive in [self.standalone, self.dedicated_db]:
             directive = "disk"
 
         logger.debug(self._stored.osd_data)
-        logger.debug(f"Incoming Disk {disk}, directive {directive}.")
+        logger.debug(f"Searching for disk {name}")
 
         for k, v in dict(self._stored.osd_data).items():
-            if v and v[directive] == disk:
+            # if value is not None.
+            if v and v[directive] == name:
                 return k  # key is the stored osd number.
         return None
 
@@ -226,24 +244,11 @@ class StorageHandler(Object):
         """Compare with disk list and remove stale entries."""
         osds = [osd["osd"] for osd in microceph.list_disk_cmd()["ConfiguredDisks"]]
 
-        for key in dict(self._stored.osd_data).keys():
-            if key not in osds:
-                val = self._stored.osd_data[key]
-                self._stored.osd_data[key] = None
+        for osd_num in dict(self._stored.osd_data).keys():
+            if osd_num not in osds:
+                val = self._stored.osd_data[osd_num]
+                self._stored.osd_data[osd_num] = None
                 logger.debug(f"Popped {val}")
-
-    def _remove_osd_data(self, disk: str):
-        """Remove data for removed OSD."""
-        num = -1  # impossible osd number.
-        for osd_num, data in dict(self._stored.osd_data).items():
-            if data and data["disk"] == disk:
-                num = osd_num
-        if num > 0:
-            val = self._stored.osd_data[num]
-            self._stored.osd_data[num] = None
-            logger.debug(f"Popped {val}")
-
-        logger.debug(self._stored.osd_data)
 
     # NOTE(utkarshbhatthere): 'storage-get' sometimes fires before
     # requested information is available.

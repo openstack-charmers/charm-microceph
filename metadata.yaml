@@ -28,12 +28,15 @@ peers:
     interface: ceph-peer
 
 storage:
-  osd-devices:
+  # Charm enrolls the provisioned storage devices as OSDs.
+  osd-standalone:
     type: block
     multiple:
       range: 0-
     minimum-size: 2G
-  disk:
+
+  # Charm enrolls the provisioned disk/db device pair as OSD.
+  osd-dedicated-db:
     type: block
     multiple:
       range: 0-
@@ -42,7 +45,9 @@ storage:
     type: block
     multiple:
       range: 0-
-  wal:
+
+  # Juju can provision storage, but charm will not perform any action.
+  manual:
     type: block
     multiple:
       range: 0-

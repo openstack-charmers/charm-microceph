@@ -73,9 +73,7 @@ def is_cluster_member(hostname: str) -> bool:
             raise e
 
 
-"""Disk CMDs and Helpers"""
-
-
+# Disk CMDs and Helpers
 def add_osd_cmd(spec: str, wal_dev: str = None, db_dev: str = None) -> None:
     """Executes MicroCeph add osd cmd with provided spec."""
     cmd = ["microceph", "disk", "add", spec]
