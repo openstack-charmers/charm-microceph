@@ -46,14 +46,12 @@ class StorageHandler(Object):
     dedicated_db = "osd-dedicated-db"
 
     charm = None
+    # _stored: per unit stored state for storage class. Contains:
+    #  osd_data: dict of dicts with int (osd num) key
+    #    disk_by_id: OSD disk by id (unique)
+    #    disk: OSD disk storage name (unique)
+    #    db: db disk storage name (unique)
     _stored = StoredState()
-    """
-        _stored: per unit stored state for storage class.
-..        osd_data: dict of dicts with int (osd num) key
-            disk_by_id: OSD disk by id (unique)
-            disk: OSD disk storage name (unique)
-            db: db disk storage name (unique)
-    """
 
     def __init__(self, charm: CharmBase, name="storage"):
         super().__init__(charm, name)
@@ -128,7 +126,8 @@ class StorageHandler(Object):
 
     def _on_storage_detaching(self, event: StorageDetachingEvent):
         """Unified storage detaching handler."""
-        # check if the detaching device (of the form directive/index) is being used as or with an OSD.
+        # check if the detaching device (of the form directive/index)
+        # is being used as or with an OSD.
         osd_num = self._get_osd_id(event.storage.full_id)
 
         if osd_num:
@@ -139,7 +138,8 @@ class StorageHandler(Object):
                     if self._is_safety_failure(e.stderr):
                         warning = f"Storage {event.storage.full_id} detached, provide replacement for osd.{osd_num}."
                         logger.warning(warning)
-                        # forcefully remove OSD and entry from stored state because Juju will deprovision storage.
+                        # forcefully remove OSD and entry from stored state
+                        # because Juju WILL deprovision storage.
                         self.remove_osd(osd_num, force=True)
                         raise sunbeam_guard.BlockedExceptionError(warning)
 
@@ -204,7 +204,7 @@ class StorageHandler(Object):
 
     def _save_osd_data(self, disk_name: str, db_name: str = None):
         """Save OSD data using juju storage names."""
-        disk_path = self.juju_storage_get(storage_id=disks[i], attribute="location")
+        disk_path = self.juju_storage_get(storage_id=disk_name, attribute="location")
 
         for osd in microceph.list_disk_cmd()["ConfiguredDisks"]:
             # get block device info using /dev/disk-by-id and lsblk.
