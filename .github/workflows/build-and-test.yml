@@ -241,10 +241,10 @@ jobs:
           tests/scripts/actionutils.sh check_osd_count microceph/0 2
           date
 
-      - name: Add OSDs with DB
+      - name: Add another OSD
         run: |
           set -eux
-          juju add-storage microceph/0 osd-dedicated-db='4G,1' db='2G,1'
+          juju add-storage microceph/0 osd-standalone='4G,1'
           juju wait-for unit microceph/0 --query='workload-message=="(workload) charm is ready"'
           tests/scripts/actionutils.sh check_osd_count microceph/0 3
           date

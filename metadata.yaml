@@ -35,17 +35,6 @@ storage:
       range: 0-
     minimum-size: 2G
 
-  # Charm enrolls the provisioned disk/db device pair as OSD.
-  osd-dedicated-db:
-    type: block
-    multiple:
-      range: 0-
-    minimum-size: 2G
-  db:
-    type: block
-    multiple:
-      range: 0-
-
   # Juju can provision storage, but charm will not perform any action.
   manual:
     type: block

@@ -43,14 +43,12 @@ class StorageHandler(Object):
 
     # storage directive names
     standalone = "osd-standalone"
-    dedicated_db = "osd-dedicated-db"
 
     charm = None
     # _stored: per unit stored state for storage class. Contains:
     #  osd_data: dict of dicts with int (osd num) key
     #    disk_by_id: OSD disk by id (unique)
     #    disk: OSD disk storage name (unique)
-    #    db: db disk storage name (unique)
     _stored = StoredState()
 
     def __init__(self, charm: CharmBase, name="storage"):
@@ -64,46 +62,14 @@ class StorageHandler(Object):
             charm.on[self.standalone.replace("-", "_")].storage_attached,
             self._on_osd_standalone_attached,
         )
-        for directive in [self.dedicated_db.replace("-", "_"), "db"]:
-            self.framework.observe(charm.on[directive].storage_attached, self._on_attached)
 
         # OSD Detaching handlers.
-        for directive in [
-            self.standalone.replace("-", "_"),
-            self.dedicated_db.replace("-", "_"),
-            "db",
-        ]:
-            self.framework.observe(
-                charm.on[directive].storage_detaching, self._on_storage_detaching
-            )
+        self.framework.observe(
+            charm.on[self.standalone.replace("-", "_")].storage_detaching,
+            self._on_storage_detaching,
+        )
 
     # storage event handlers
-
-    def _on_attached(self, event: StorageAttachedEvent):
-        """Storage attached handler for osd-dedicated-db/db devices."""
-        if not self.charm.ready_for_service():
-            logger.warning("MicroCeph not ready yet, deferring storage event.")
-            event.defer()
-            return
-
-        self._clean_stale_osd_data()
-
-        enroll = {
-            self.dedicated_db: [],
-            "db": [],
-        }
-
-        # filter storage for osd-dedicated-db and db directives only.
-        for storage in self._fetch_filtered_storages([self.dedicated_db, "db"]):
-            if not self._get_osd_id(storage):
-                # split storage names of the form osd-dedicated-db/n or db/n
-                enroll[storage.split("/")[0]].append(storage)
-
-        # enrolls available disks with DB and save osd data.
-        with sunbeam_guard.guard(self.charm, self.name):
-            self.charm.status.set(MaintenanceStatus("Enrolling OSDs"))
-            self._enroll_with_db(disks=enroll[self.dedicated_db], dbs=enroll["db"])
-            self.charm.status.set(ActiveStatus("charm is ready"))
 
     def _on_osd_standalone_attached(self, event: StorageAttachedEvent):
         """Storage attached handler for osd-standalone."""
@@ -164,20 +130,6 @@ class StorageHandler(Object):
         logger.debug(f"Command {' '.join(cmd)} finished; Output: {process.stdout}")
         return process.stdout
 
-    def _enroll_with_db(self, disks: list, dbs: list):
-        """Checks if sufficient devices are available to be enrolled into OSDs."""
-        enrollment_count = min(len(disks), len(dbs))
-        for i in range(enrollment_count):
-            try:
-                microceph.add_osd_cmd(
-                    spec=self.juju_storage_get(storage_id=disks[i], attribute="location"),
-                    db_dev=self.juju_storage_get(storage_id=dbs[i], attribute="location"),
-                )
-                # store configured devices.
-                self._save_osd_data(disk_name=disks[i], db_name=dbs[i])
-            except CalledProcessError as e:
-                logger.error(e.stderr)
-
     def _enroll_disks_in_batch(self, disks: list):
         """Adds requested Disks to Microceph and stored state."""
         # Enroll OSDs
@@ -228,7 +180,7 @@ class StorageHandler(Object):
         # storage name is of the form db/3 or osd-standalone/2 etc.
         directive = name.split("/")[0]
 
-        if directive in [self.standalone, self.dedicated_db]:
+        if directive == self.standalone:
             directive = "disk"
 
         logger.debug(self._stored.osd_data)
