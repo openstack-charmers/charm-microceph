@@ -142,6 +142,7 @@ jobs:
           date
           sudo snap install juju
           mkdir -p ~/.local/share/juju
+          sudo mkdir -p /root/.local/share/juju
           juju bootstrap localhost
           juju add-model microceph-test
           date
@@ -218,6 +219,8 @@ jobs:
           sudo apt-get -qq install jq
           sudo snap install juju
           mkdir -p ~/.local/share/juju
+          sudo mkdir -p /root/.local/share/
+          sudo ln -s ~/.local/share/juju /root/.local/share/juju
           juju bootstrap localhost
           juju add-model microceph-test
           date
@@ -230,7 +233,7 @@ jobs:
           juju deploy ~/artifacts/microceph.charm --storage osd-standalone='4G,3' --constraints="virt-type=virtual-machine root-disk=40G mem=8G"
           # wait for charm to bootstrap and OSD devices to enroll.
           juju wait-for unit microceph/0 --query='workload-message=="(workload) charm is ready"'
-          tests/scripts/actionutils.sh check_osd_count microceph/0 3
+          bash ./tests/scripts/ci_helpers.sh check_osd_count microceph/0 3
           date
 
       - name: Remove Juju Storage
@@ -238,7 +241,7 @@ jobs:
           set -eux
           juju detach-storage osd-standalone/0
           juju wait-for unit microceph/0 --query='workload-status=="blocked"'
-          tests/scripts/actionutils.sh check_osd_count microceph/0 2
+          bash tests/scripts/ci_helpers.sh check_osd_count microceph/0 2
           date
 
       - name: Add another OSD
@@ -246,7 +249,7 @@ jobs:
           set -eux
           juju add-storage microceph/0 osd-standalone='4G,1'
           juju wait-for unit microceph/0 --query='workload-message=="(workload) charm is ready"'
-          tests/scripts/actionutils.sh check_osd_count microceph/0 3
+          bash tests/scripts/ci_helpers.sh check_osd_count microceph/0 3
           date
 
       - name: Add and relate RadosGW charm

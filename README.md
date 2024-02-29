@@ -42,15 +42,16 @@ Add the disks on each node
 ## Storage
 
 The microceph charm can take advantage of Juju storage devices automatically
-enrolling disks as standalone OSDs or with dedicated DB devices.
+enrolling disks as standalone OSDs or just provision them to be configured by
+the operator manually.
 
 For (say) 4 standalone OSDs on unit microceph/n.
 
     juju add-storage microceph/n osd-standalone='cinder,10G,4'
 
-For OSDs with dedicated DB devices.
+Provisioning block storage for manual configuration.
 
-    juju add-storage microceph/n osd-dedicated-db='cinder,10G,4' db='cinder,2G,4'
+    juju add-storage microceph/n manual='cinder,10G,4'
 
 ## Actions
 
