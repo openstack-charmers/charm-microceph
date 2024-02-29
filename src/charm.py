@@ -87,6 +87,8 @@ class MicroCephCharm(sunbeam_charm.OSBaseOperatorCharm):
 
         try:
             snap.SnapCache()["microceph"].hold()
+            # Temporary fix while the auto connect request for the interface is accepted.
+            snap.SnapCache()["microceph"].connect("mount-observe")
         except Exception:
             logger.exception("Failed to hold microceph refresh: ")
 
