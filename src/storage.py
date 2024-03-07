@@ -96,7 +96,7 @@ class StorageHandler(Object):
         # is being used as or with an OSD.
         osd_num = self._get_osd_id(event.storage.full_id)
 
-        if osd_num is not None:
+        if osd_num is None:
             return
 
         with sunbeam_guard.guard(self.charm, self.name):
