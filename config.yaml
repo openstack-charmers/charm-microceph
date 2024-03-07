@@ -1,4 +1,4 @@
 options:
   snap-channel:
-    default: "reef/edge"
+    default: "reef/stable"
     type: string

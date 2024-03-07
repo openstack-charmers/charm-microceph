@@ -96,18 +96,20 @@ class StorageHandler(Object):
         # is being used as or with an OSD.
         osd_num = self._get_osd_id(event.storage.full_id)
 
-        if osd_num:
-            with sunbeam_guard.guard(self.charm, self.name):
-                try:
-                    self.remove_osd(osd_num)
-                except CalledProcessError as e:
-                    if self._is_safety_failure(e.stderr):
-                        warning = f"Storage {event.storage.full_id} detached, provide replacement for osd.{osd_num}."
-                        logger.warning(warning)
-                        # forcefully remove OSD and entry from stored state
-                        # because Juju WILL deprovision storage.
-                        self.remove_osd(osd_num, force=True)
-                        raise sunbeam_guard.BlockedExceptionError(warning)
+        if osd_num is not None:
+            return
+
+        with sunbeam_guard.guard(self.charm, self.name):
+            try:
+                self.remove_osd(osd_num)
+            except CalledProcessError as e:
+                if self._is_safety_failure(e.stderr):
+                    warning = f"Storage {event.storage.full_id} detached, provide replacement for osd.{osd_num}."
+                    logger.warning(warning)
+                    # forcefully remove OSD and entry from stored state
+                    # because Juju WILL deprovision storage.
+                    self.remove_osd(osd_num, force=True)
+                    raise sunbeam_guard.BlockedExceptionError(warning)
 
     # helper functions
 
@@ -214,7 +216,8 @@ class StorageHandler(Object):
             _args.append(attribute)
         try:
             return json.loads(self._run(_args))
-        except ValueError:
+        except ValueError as e:
+            logger.error(e)
             return None
 
     def juju_storage_list(self, storage_name=None):
@@ -224,7 +227,8 @@ class StorageHandler(Object):
             _args.append(storage_name)
         try:
             return json.loads(self._run(_args))
-        except ValueError:
+        except ValueError as e:
+            logger.error(e)
             return None
         except OSError as e:
             import errno

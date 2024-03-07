@@ -135,6 +135,7 @@ jobs:
       - name: Setup LXD
         uses: canonical/setup-lxd@v0.1.1
         with:
+          # pin lxd since there were some recurring issues in recent releases.
           channel: 5.18/stable
 
       - name: Install dependencies
@@ -211,6 +212,7 @@ jobs:
       - name: Setup LXD
         uses: canonical/setup-lxd@v0.1.1
         with:
+          # pin lxd since there were some recurring issues in recent releases.
           channel: 5.18/stable
 
       - name: Install dependencies

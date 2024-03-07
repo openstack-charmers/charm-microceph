@@ -92,7 +92,10 @@ def add_batch_osds(disks: list) -> None:
         # nothing to do.
         return
 
+    # The disk add command takes a space separated list
+    # of block devices as params.
     cmd.extend(disks)
+
     _run_cmd(cmd)
 
 
