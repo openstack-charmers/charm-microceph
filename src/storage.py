@@ -200,9 +200,8 @@ class StorageHandler(Object):
 
         for osd_num in dict(self._stored.osd_data).keys():
             if osd_num not in osds:
-                val = self._stored.osd_data[osd_num]
-                self._stored.osd_data.pop(osd_num)
-                logger.debug(f"Popped {val}")
+                val = self._stored.osd_data.pop(osd_num)
+                logger.debug(f"Popped state data for {osd_num}: {val}.")
 
     # NOTE(utkarshbhatthere): 'storage-get' sometimes fires before
     # requested information is available.
