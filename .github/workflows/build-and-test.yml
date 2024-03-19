@@ -38,7 +38,8 @@ jobs:
       - name: Setup LXD
         uses: canonical/setup-lxd@v0.1.1
         with:
-          channel: latest/stable
+          # pin lxd to LTS release.
+          channel: 5.21/stable
       - name: Build charm(s)
         id: builder
         run: |
@@ -117,7 +118,7 @@ jobs:
       - lint
       - unit-test
       - build
-    name: Juju test
+    name: Juju cluster test
     runs-on: [self-hosted, xlarge]
     steps:
 
@@ -135,8 +136,8 @@ jobs:
       - name: Setup LXD
         uses: canonical/setup-lxd@v0.1.1
         with:
-          # pin lxd since there were some recurring issues in recent releases.
-          channel: 5.18/stable
+          # pin lxd to LTS release.
+          channel: 5.21/stable
 
       - name: Install dependencies
         run: ./tests/scripts/ci_helpers.sh install_deps
@@ -187,7 +188,7 @@ jobs:
       - lint
       - unit-test
       - build
-    name: Juju test
+    name: Juju single test
     runs-on: [self-hosted, xlarge]
     steps:
 
@@ -205,8 +206,8 @@ jobs:
       - name: Setup LXD
         uses: canonical/setup-lxd@v0.1.1
         with:
-          # pin lxd since there were some recurring issues in recent releases.
-          channel: 5.18/stable
+          # pin lxd to LTS release.
+          channel: 5.21/stable
 
       - name: Install dependencies
         run: ./tests/scripts/ci_helpers.sh install_deps
@@ -287,6 +288,9 @@ jobs:
 
       - name: Setup LXD
         uses: canonical/setup-lxd@v0.1.1
+        with:
+          # pin lxd to LTS release.
+          channel: 5.21/stable
 
       - name: Install dependencies
         run: ./tests/scripts/ci_helpers.sh install_deps
