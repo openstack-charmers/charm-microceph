@@ -67,7 +67,7 @@ class TestCharm(test_utils.CharmTestCase):
 
         action_event = MagicMock()
         action_event.params = {"device-id": "/dev/sdb"}
-        self.harness.charm._add_osd_action(action_event)
+        self.harness.charm.storage._add_osd_action(action_event)
 
         action_event.set_results.assert_called()
         action_event.fail.assert_not_called()
@@ -88,7 +88,7 @@ class TestCharm(test_utils.CharmTestCase):
 
         action_event = MagicMock()
         action_event.params = {"loop-spec": "4G,3"}
-        self.harness.charm._add_osd_action(action_event)
+        self.harness.charm.storage._add_osd_action(action_event)
 
         action_event.set_results.assert_called()
         action_event.fail.assert_not_called()
@@ -106,7 +106,7 @@ class TestCharm(test_utils.CharmTestCase):
 
         action_event = MagicMock()
         action_event.params = {"device-id": "/dev/sdb"}
-        self.harness.charm._add_osd_action(action_event)
+        self.harness.charm.storage._add_osd_action(action_event)
 
         action_event.set_results.assert_not_called()
         action_event.fail.assert_called()
@@ -125,7 +125,7 @@ class TestCharm(test_utils.CharmTestCase):
         action_event = MagicMock()
         self._create_subprocess_output_mock(microceph_cmd_output)
 
-        self.harness.charm._list_disks_action(action_event)
+        self.harness.charm.storage._list_disks_action(action_event)
         action_event.set_results.assert_called_with(expected_disks)
 
     def test_list_disks_action_node_not_bootstrapped(self):
@@ -133,40 +133,30 @@ class TestCharm(test_utils.CharmTestCase):
         test_utils.add_complete_peer_relation(self.harness)
 
         action_event = MagicMock()
-        self.harness.charm._list_disks_action(action_event)
+        self.harness.charm.storage._list_disks_action(action_event)
         action_event.set_results.assert_not_called()
         action_event.fail.assert_called()
 
-    def test_list_disks_action_no_osds_no_disks(self):
-        microceph_cmd_output = """
-Disks configured in MicroCeph:
-+-----+----------+------+
-| OSD | LOCATION | PATH |
-+-----+----------+------+
-
-Available unpartitioned disks on this system:
-+-------+----------+------+------+
-| MODEL | CAPACITY | TYPE | PATH |
-+-------+----------+------+------+
-        """
+    @patch.object(microceph, "subprocess")
+    def test_list_disks_action_no_osds_no_disks(self, subprocess):
+        self.subprocess = subprocess
+        microceph_cmd_output = '{"ConfiguredDisks":[],"AvailableDisks":[]}'
 
         expected_disks = {"osds": [], "unpartitioned-disks": []}
         self._test_list_disks_action(microceph_cmd_output, expected_disks)
 
-    def test_list_disks_action_no_osds_1_disk(self):
-        microceph_cmd_output = """
-        Disks configured in MicroCeph:
-+-----+----------+------+
-| OSD | LOCATION | PATH |
-+-----+----------+------+
-
-Available unpartitioned disks on this system:
-+---------------+----------+------+-----------------------------------------------------+
-|     MODEL     | CAPACITY | TYPE |                        PATH                         |
-+---------------+----------+------+-----------------------------------------------------+
-| QEMU HARDDISK | 1.00GiB  | scsi | /dev/disk/by-id/scsi-0QEMU_QEMU_HARDDISK_lxd_osd--1 |
-+---------------+----------+------+-----------------------------------------------------+
-        """
+    @patch.object(microceph, "subprocess")
+    def test_list_disks_action_no_osds_1_disk(self, subprocess):
+        self.subprocess = subprocess
+        microceph_cmd_output = """{
+            "ConfiguredDisks":[],
+            "AvailableDisks":[{
+                    "model": "QEMU HARDDISK",
+                    "size": "1.00GiB",
+                    "type": "scsi",
+                    "path": "/dev/disk/by-id/scsi-0QEMU_QEMU_HARDDISK_lxd_osd--1"
+            }]
+        }"""
 
         expected_disks = {
             "osds": [],
@@ -181,25 +171,22 @@ Available unpartitioned disks on this system:
         }
         self._test_list_disks_action(microceph_cmd_output, expected_disks)
 
-    def test_list_disks_action_1_osd_no_disks(self):
-        microceph_cmd_output = """
-Disks configured in MicroCeph:
-+-----+-------------+-----------------------------------------------------+
-| OSD |  LOCATION   |                        PATH                         |
-+-----+-------------+-----------------------------------------------------+
-| 0   | microceph-1 | /dev/disk/by-id/scsi-0QEMU_QEMU_HARDDISK_lxd_osd--1 |
-+-----+-------------+-----------------------------------------------------+
-
-Available unpartitioned disks on this system:
-+-------+----------+------+------+
-| MODEL | CAPACITY | TYPE | PATH |
-+-------+----------+------+------+
-        """
+    @patch.object(microceph, "subprocess")
+    def test_list_disks_action_1_osd_no_disks(self, subprocess):
+        self.subprocess = subprocess
+        microceph_cmd_output = """{
+            "ConfiguredDisks":[{
+                "osd":0,
+                "location":"microceph-1",
+                "path":"/dev/disk/by-id/scsi-0QEMU_QEMU_HARDDISK_lxd_osd--1"
+            }],
+            "AvailableDisks":[]
+        }"""
 
         expected_disks = {
             "osds": [
                 {
-                    "osd": "0",
+                    "osd": 0,
                     "location": "microceph-1",
                     "path": "/dev/disk/by-id/scsi-0QEMU_QEMU_HARDDISK_lxd_osd--1",
                 }
@@ -208,27 +195,27 @@ Available unpartitioned disks on this system:
         }
         self._test_list_disks_action(microceph_cmd_output, expected_disks)
 
-    def test_list_disks_action_1_osd_1_disk(self):
-        microceph_cmd_output = """
-Disks configured in MicroCeph:
-+-----+-------------+-----------------------------------------------------+
-| OSD |  LOCATION   |                        PATH                         |
-+-----+-------------+-----------------------------------------------------+
-| 0   | microceph-1 | /dev/disk/by-id/scsi-0QEMU_QEMU_HARDDISK_lxd_osd--1 |
-+-----+-------------+-----------------------------------------------------+
-
-Available unpartitioned disks on this system:
-+---------------+----------+------+-----------------------------------------------------+
-|     MODEL     | CAPACITY | TYPE |                        PATH                         |
-+---------------+----------+------+-----------------------------------------------------+
-| QEMU HARDDISK | 1.00GiB  | scsi | /dev/disk/by-id/scsi-0QEMU_QEMU_HARDDISK_lxd_osd--2 |
-+---------------+----------+------+-----------------------------------------------------+
-        """
+    @patch.object(microceph, "subprocess")
+    def test_list_disks_action_1_osd_1_disk(self, subprocess):
+        self.subprocess = subprocess
+        microceph_cmd_output = """{
+            "ConfiguredDisks":[{
+                "osd":0,
+                "location":"microceph-1",
+                "path":"/dev/disk/by-id/scsi-0QEMU_QEMU_HARDDISK_lxd_osd--1"
+            }],
+            "AvailableDisks":[{
+                    "model": "QEMU HARDDISK",
+                    "size": "1.00GiB",
+                    "type": "scsi",
+                    "path": "/dev/disk/by-id/scsi-0QEMU_QEMU_HARDDISK_lxd_osd--2"
+            }]
+        }"""
 
         expected_disks = {
             "osds": [
                 {
-                    "osd": "0",
+                    "osd": 0,
                     "location": "microceph-1",
                     "path": "/dev/disk/by-id/scsi-0QEMU_QEMU_HARDDISK_lxd_osd--1",
                 }
@@ -244,25 +231,22 @@ Available unpartitioned disks on this system:
         }
         self._test_list_disks_action(microceph_cmd_output, expected_disks)
 
-    def test_list_disks_action_1_osd_no_disks_fqdn(self):
-        microceph_cmd_output = """
-Disks configured in MicroCeph:
-+-----+-----------------+-----------------------------------------------------+
-| OSD |  LOCATION       |                        PATH                         |
-+-----+-----------------+-----------------------------------------------------+
-| 0   | microceph-1.lxd | /dev/disk/by-id/scsi-0QEMU_QEMU_HARDDISK_lxd_osd--1 |
-+-----+-----------------+-----------------------------------------------------+
-
-Available unpartitioned disks on this system:
-+-------+----------+------+------+
-| MODEL | CAPACITY | TYPE | PATH |
-+-------+----------+------+------+
-        """
+    @patch.object(microceph, "subprocess")
+    def test_list_disks_action_1_osd_no_disks_fqdn(self, subprocess):
+        self.subprocess = subprocess
+        microceph_cmd_output = """{
+            "ConfiguredDisks":[{
+                "osd":0,
+                "location":"microceph-1.lxd",
+                "path":"/dev/disk/by-id/scsi-0QEMU_QEMU_HARDDISK_lxd_osd--1"
+            }],
+            "AvailableDisks":[]
+        }"""
 
         expected_disks = {
             "osds": [
                 {
-                    "osd": "0",
+                    "osd": 0,
                     "location": "microceph-1.lxd",
                     "path": "/dev/disk/by-id/scsi-0QEMU_QEMU_HARDDISK_lxd_osd--1",
                 }
