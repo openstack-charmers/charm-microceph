@@ -425,6 +425,12 @@ class CephClientProvides(Object):
 
         if not self.charm.ready_for_service():
             logger.info("Not processing request as service is not yet ready")
+            event.defer()
+            return
+
+        if get_osd_count() == 0:
+            logger.info("Storage not available, deferring event.")
+            event.defer()
             return
 
         self._handle_client_relation(event.relation, event.unit)
