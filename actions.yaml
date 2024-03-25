@@ -27,7 +27,7 @@ set-pool-size:
         A comma-separated list of pools, or an asterisk ('*') to set
         the size for every existing pool.
     size:
-      type: int
+      type: integer
       description: The new pool size
   required:
     - pools
