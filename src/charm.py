@@ -66,6 +66,7 @@ class MicroCephCharm(sunbeam_charm.OSBaseOperatorCharm):
         self.framework.observe(self.on.install, self._on_install)
         self.framework.observe(self.on.list_disks_action, self._list_disks_action)
         self.framework.observe(self.on.add_osd_action, self._add_osd_action)
+        self.framework.observe(self.on.set_pool_size_action, self._set_pool_size_action)
         self.framework.observe(self.on.stop, self._on_stop)
         self.cluster_nodes = cluster.ClusterNodes(self)
         self.cluster_upgrades = cluster.ClusterUpgrades(self)
@@ -158,6 +159,22 @@ class MicroCephCharm(sunbeam_charm.OSBaseOperatorCharm):
                 logger.error(e.stderr)
                 event.fail(e.stderr)
                 return
+
+        event.set_results({"status": "success"})
+
+    def _set_pool_size_action(self, event: ActionEvent):
+        """Set the size for one or more pools."""
+        pools = event.params.get("pools")
+        size = event.params.get("size")
+
+        cmd = ["sudo", "microceph", "pool", "set-rf", "--size", str(size), pools]
+        try:
+            logging.debug("Setting the new pool(s) size")
+            subprocess.run(cmd, check=True, timeout=180)
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
+            logger.warning("Failed to set new pool size")
+            event.fail("set-pool-size failed")
+            return
 
         event.set_results({"status": "success"})
 

@@ -17,3 +17,18 @@ add-osd:
         Device ID of the disk. Accepts comma separated
         device id's to specify multiple disks
   additionalProperties: false
+set-pool-size:
+  description: |
+    Sets the size for one or several pools.
+  params:
+    pools:
+      type: string
+      description: |
+        A comma-separated list of pools, or an asterisk ('*') to set
+        the size for every existing pool.
+    size:
+      type: int
+      description: The new pool size
+  required:
+    - pools
+    - size
