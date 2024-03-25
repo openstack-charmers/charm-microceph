@@ -171,7 +171,7 @@ class MicroCephCharm(sunbeam_charm.OSBaseOperatorCharm):
         try:
             logging.debug("Setting the new pool(s) size")
             subprocess.run(cmd, check=True, timeout=180)
-        except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
             logger.warning("Failed to set new pool size")
             event.fail("set-pool-size failed")
             return
