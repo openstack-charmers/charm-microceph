@@ -339,13 +339,6 @@ jobs:
           sleep 60
           juju ssh microceph/0 -- sudo ceph -s
 
-      - name: Test the set-pool-size action
-        run: |
-          set -eux
-          juju ssh microceph/0 -- sudo ceph osd pool create mypool
-          juju run microceph/0 set-pool-size pools=mypool size=1
-          juju ssh microceph/0 -- sudo ceph osd pool get mypool size | fgrep -x "size: 1"
-
       - name: Test successful upgrade
         run: |
           set -eux
@@ -355,6 +348,13 @@ jobs:
           juju ssh microceph/0 -- sudo ceph -s
           juju status
           date
+
+      - name: Test the set-pool-size action
+        run: |
+          set -eux
+          juju ssh microceph/0 -- sudo ceph osd pool create mypool
+          juju run microceph/0 set-pool-size pools=mypool size=1
+          juju ssh microceph/0 -- sudo ceph osd pool get mypool size | fgrep -x "size: 1"
 
       - name: Test that downgrade blocks
         run: |
