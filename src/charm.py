@@ -119,7 +119,7 @@ class MicroCephCharm(sunbeam_charm.OSBaseOperatorCharm):
         try:
             microceph.set_pool_size(pools, size)
             event.set_results({"status": "success"})
-        except Exception:
+        except subprocess.CalledProcessError:
             logger.warning("Failed to set new pool size")
             event.fail("set-pool-size failed")
 
