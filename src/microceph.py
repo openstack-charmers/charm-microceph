@@ -214,6 +214,12 @@ def can_upgrade_snap(current, new: str) -> bool:
     return newer
 
 
+def set_pool_size(pools, size):
+    """Set the size for one or more pools."""
+    cmd = ["sudo", "microceph", "pool", "set-rf", "--size", str(size), pools]
+    _run_cmd(cmd)
+
+
 class CephHealth(enum.Enum):
     """Enumerate ceph health status."""
 

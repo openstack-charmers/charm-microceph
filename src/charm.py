@@ -167,16 +167,12 @@ class MicroCephCharm(sunbeam_charm.OSBaseOperatorCharm):
         pools = event.params.get("pools")
         size = event.params.get("size")
 
-        cmd = ["sudo", "microceph", "pool", "set-rf", "--size", str(size), pools]
         try:
-            logging.debug("Setting the new pool(s) size")
-            subprocess.run(cmd, check=True, timeout=180)
-        except (subprocess.CalledProcessError, subprocess.TimeoutExpired):
+            microceph.set_pool_size(pools, size)
+            event.set_results({"status": "success"})
+        except Exception:
             logger.warning("Failed to set new pool size")
             event.fail("set-pool-size failed")
-            return
-
-        event.set_results({"status": "success"})
 
     def _handle_disk_list_output(self, output: str) -> dict:
         # Do not use _ for keys that need to set in action result, instead use -.
