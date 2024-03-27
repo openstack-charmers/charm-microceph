@@ -158,12 +158,17 @@ class StorageHandler(Object):
             event.fail(e.stderr)
             return
 
+        osds = [self._to_lower_dict(osd) for osd in disks["ConfiguredDisks"]]
+        available_disks = [self._to_lower_dict(disk) for disk in disks["AvailableDisks"]]
+
         # result should conform to previous expectations.
-        event.set_results(
-            {"osds": disks["ConfiguredDisks"], "unpartitioned-disks": disks["AvailableDisks"]}
-        )
+        event.set_results({"osds": osds, "unpartitioned-disks": available_disks})
 
     # helper functions
+
+    def _to_lower_dict(self, input: dict) -> dict:
+        """Makes the json keys compatible with sunbeam."""
+        return {k.lower(): v for k, v in input.items()}
 
     def _fetch_filtered_storages(self, directives: list) -> list:
         """Provides a filtered list of attached storage devices."""
