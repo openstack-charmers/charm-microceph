@@ -14,14 +14,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""Handle Juju Storage Events."""
+"""Handle Charm's Storage Events."""
 
 import json
 import logging
-from subprocess import CalledProcessError, run
+from subprocess import CalledProcessError, TimeoutExpired, run
 
 import ops_sunbeam.guard as sunbeam_guard
-from ops.charm import CharmBase, StorageAttachedEvent, StorageDetachingEvent
+from ops.charm import ActionEvent, CharmBase, StorageAttachedEvent, StorageDetachingEvent
 from ops.framework import Object, StoredState
 from ops.model import ActiveStatus, MaintenanceStatus
 from tenacity import retry, stop_after_attempt, wait_fixed
@@ -32,11 +32,13 @@ logger = logging.getLogger(__name__)
 
 
 class StorageHandler(Object):
-    """The Storage class manages the Juju storage events.
+    """The Storage class manages the storage events.
 
     Observes the following events:
     1) *_storage_attached
     2) *_storage_detaching
+    3).add_osd_action
+    4).list_disks_action
     """
 
     name = "storage"
@@ -68,6 +70,9 @@ class StorageHandler(Object):
             charm.on[self.standalone.replace("-", "_")].storage_detaching,
             self._on_storage_detaching,
         )
+
+        self.framework.observe(charm.on.add_osd_action, self._add_osd_action)
+        self.framework.observe(charm.on.list_disks_action, self._list_disks_action)
 
     # storage event handlers
 
@@ -110,6 +115,53 @@ class StorageHandler(Object):
                     # because Juju WILL deprovision storage.
                     self.remove_osd(osd_num, force=True)
                     raise sunbeam_guard.BlockedExceptionError(warning)
+
+    def _add_osd_action(self, event: ActionEvent):
+        """Add OSD disks to microceph."""
+        if not self.charm.peers.interface.state.joined:
+            event.fail("Node not yet joined in microceph cluster")
+            return
+
+        # list of osd specs to be executed with disk add cmd.
+        add_osd_specs = list()
+
+        # fetch requested loop spec.
+        loop_spec = event.params.get("loop-spec", None)
+        if loop_spec is not None:
+            add_osd_specs.append(f"loop,{loop_spec}")
+
+        # fetch requested disks.
+        device_ids = event.params.get("device-id")
+        if device_ids is not None:
+            add_osd_specs.extend(device_ids.split(","))
+
+        for spec in add_osd_specs:
+            try:
+                microceph.add_osd_cmd(spec)
+            except (CalledProcessError, TimeoutExpired) as e:
+                logger.error(e.stderr)
+                event.fail(e.stderr)
+                return
+
+        event.set_results({"status": "success"})
+
+    def _list_disks_action(self, event: ActionEvent):
+        """List enrolled and uncofigured disks."""
+        if not self.charm.peers.interface.state.joined:
+            event.fail("Node not yet joined in microceph cluster")
+            return
+
+        try:
+            disks = microceph.list_disk_cmd()
+        except (CalledProcessError, TimeoutExpired) as e:
+            logger.warning(e.stderr)
+            event.fail(e.stderr)
+            return
+
+        # result should conform to previous expectations.
+        event.set_results(
+            {"osds": disks["ConfiguredDisks"], "unpartitioned-disks": disks["AvailableDisks"]}
+        )
 
     # helper functions
 
@@ -170,16 +222,15 @@ class StorageHandler(Object):
 
             # e.g. check 'vdd' in '/dev/vdd'
             if local_device["name"] in disk_path:
-                logger.debug(f"Added OSD {osd['osd']} with Disk {disk_name}, DB {db_name}")
+                logger.debug(f"Added OSD {osd['osd']} with Disk {disk_name}.")
                 self._stored.osd_data[osd["osd"]] = {
                     "disk_by_id": osd["path"],  # /dev/disk-by-id/ for OSD device.
                     "disk": disk_name,  # storage name for OSD device.
-                    "db": db_name,  # storage name for DB device.
                 }
 
     def _get_osd_id(self, name: str):
         """Fetch the OSD number of consuming OSD, None is not used as OSD."""
-        # storage name is of the form db/3 or osd-standalone/2 etc.
+        # storage name is of the form osd-standalone/2 etc.
         directive = name.split("/")[0]
 
         if directive == self.standalone:
