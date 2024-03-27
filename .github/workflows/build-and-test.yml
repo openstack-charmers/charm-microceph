@@ -235,7 +235,7 @@ jobs:
         run: |
           set -eux
           juju add-storage microceph/0 osd-standalone='4G,1'
-          juju wait-for unit microceph/0 --query='workload-message=="(workload) charm is ready"'
+          juju wait-for unit microceph/0 --timeout '20m' --query='workload-message=="(workload) charm is ready"'
           bash tests/scripts/ci_helpers.sh check_osd_count microceph/0 3
           date
 
