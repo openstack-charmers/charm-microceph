@@ -45,13 +45,24 @@ class TestCharm(test_utils.CharmTestCase):
         self.addCleanup(self.harness.cleanup)
         self.harness.begin()
 
-    def test_all_relations(self):
+    @patch.object(microceph, "subprocess")
+    def test_all_relations(self, subprocess):
         """Test all the charms relations."""
         self.harness.set_leader()
         self.harness.update_config({"snap-channel": "1.0/stable"})
         test_utils.add_complete_peer_relation(self.harness)
-        self.subprocess.run.assert_any_call(
-            ["sudo", "microceph", "cluster", "bootstrap"],
+        subprocess.run.assert_any_call(
+            [
+                "microceph",
+                "cluster",
+                "bootstrap",
+                "--mon-ip",
+                "10.0.0.10",
+                "--cluster-network",
+                "10.0.0.0/24",
+                "--microceph-ip",
+                "10.0.0.10",
+            ],
             capture_output=True,
             text=True,
             check=True,

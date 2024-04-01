@@ -240,13 +240,29 @@ class MicroCephCharm(sunbeam_charm.OSBaseOperatorCharm):
         if isinstance(event, MicroClusterNodeAddedEvent):
             self.cluster_nodes.join_node_to_cluster(event)
 
+    def _get_bootstrap_params(self) -> dict:
+        """Fetch bootstrap parameters."""
+        mon_ip = micro_ip = cluster_net = ""
+        try:
+            mon_ip = self.model.get_binding(binding_key="public").network.bind_address
+            cluster_nets = self.model.get_binding(binding_key="cluster").network.egress_subnets
+            if len(cluster_nets) > 0:
+                cluster_net = cluster_nets[0]
+            micro_ip = self.model.get_binding(binding_key="admin").network.bind_address
+            logger.info({"mon_ip": mon_ip, "cluster_net": cluster_net, "micro_ip": micro_ip})
+        except ops.model.ModelError as e:
+            logger.warning(e)
+        finally:
+            return {
+                "mon_ip": format(mon_ip),
+                "cluster_net": format(cluster_net),
+                "micro_ip": format(micro_ip),
+            }
+
     def bootstrap_cluster(self, event: ops.framework.EventBase) -> None:
         """Bootstrap microceph cluster."""
-        cmd = ["sudo", "microceph", "cluster", "bootstrap"]
         try:
-            logger.debug(f'Running command {" ".join(cmd)}')
-            process = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=180)
-            logger.debug(f"Command finished. stdout={process.stdout}, " f"stderr={process.stderr}")
+            microceph.bootstrap_cluster(self._get_bootstrap_params())
         except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
             logger.warning(e.stderr)
             hostname = gethostname()

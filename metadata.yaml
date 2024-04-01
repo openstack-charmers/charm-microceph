@@ -17,6 +17,14 @@ tags:
   - storage
   - misc
 
+extra-bindings:
+  # Cluster public services bind to this space.
+  public:
+  # Cluster internal services bind to this space.
+  cluster:
+  # MicroCeph daemon binds to this space.
+  admin:
+
 provides:
   ceph:
     interface: ceph-client
