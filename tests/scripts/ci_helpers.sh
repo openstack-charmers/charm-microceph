@@ -25,6 +25,30 @@ function install_deps() {
     date
 }
 
+function install_juju_simple() {
+    sudo snap install juju
+    mkdir -p ~/.local/share/juju
+    juju bootstrap localhost
+}
+
+function setup_juju_spaces() {
+    set -x
+    date
+    juju add-model spacetest
+    juju add-space cluster
+    # Subnet value from LXD profile.
+    juju move-to-space cluster 10.85.4.0/24
+}
+
+function seed_lxd_profile() {
+    set -x
+    date
+    local file_path="${1?missing}"
+    lxd init --verbose --preseed < $file_path
+    lxc profile show default
+    lxc network list
+}
+
 run="${1}"
 shift
 

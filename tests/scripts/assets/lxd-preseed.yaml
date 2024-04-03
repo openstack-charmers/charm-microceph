@@ -1,0 +1,35 @@
+networks:
+- config:
+    ipv4.address: 10.196.231.1/24
+    ipv4.nat: "true"
+    ipv6.address: fd42:cb51:9be9:ca41::1/64
+    ipv6.nat: "true"
+  description: ""
+  name: public
+  type: bridge
+- config:
+    ipv4.address: 10.85.4.1/24
+    ipv4.nat: "true"
+    ipv6.address: fd42:74aa:91ba:245b::1/64
+    ipv6.nat: "true"
+  description: ""
+  name: cluster
+  type: bridge
+storage_pools:
+- config: {}
+  name: default
+  driver: dir
+profiles:
+- config: {}
+  description: ""
+  devices:
+    eth0:
+      name: eth0
+      network: public
+      type: nic
+    root:
+      path: /
+      pool: default
+      type: disk
+  name: default
+projects: []

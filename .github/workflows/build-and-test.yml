@@ -264,8 +264,6 @@ jobs:
             exit 1
           fi
 
-
-
   juju-upgrade-test:
     needs:
       - lint
@@ -356,3 +354,78 @@ jobs:
           juju wait-for application microceph --query='status=="blocked"'
           juju status
           juju status blocked | egrep '^microceph/.*Cannot upgrade.*to quincy/stable'
+
+  juju-network-spaces-test:
+    needs:
+      - lint
+      - unit-test
+      - build
+    name: Juju Network spaces test
+    runs-on: [self-hosted, xlarge]
+    steps:
+
+      - name: Download charm
+        uses: actions/download-artifact@v3
+        with:
+          name: charms
+          path: ~/artifacts/
+
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Setup LXD
+        uses: canonical/setup-lxd@v0.1.1
+        with:
+          # pin lxd since there were some recurring issues in recent releases.
+          channel: 5.21/stable
+
+      - name: Seed preliminary LXD profile
+        run: ./tests/scripts/ci_helpers.sh seed_lxd_profile ./tests/scripts/assets/lxd-preseed.yaml
+
+      - name: Install dependencies
+        run: ./tests/scripts/ci_helpers.sh install_juju_simple
+
+      - name: Configure Juju spaces
+        run: |
+          # Seed multi-interface profile with netplan config.
+          ./tests/scripts/ci_helpers.sh seed_lxd_profile ./tests/scripts/assets/lxd-preseed-cloud-init.yaml
+          # Configure Juju spaces
+          ./tests/scripts/ci_helpers.sh setup_juju_spaces
+
+      - name: Install MicroCeph charm
+        run: |
+          set -eux
+          date
+          mv ~/artifacts/microceph.charm ./tests/scripts/assets/
+          juju deploy ./tests/scripts/assets/juju-spaces-bundle.yaml
+          # wait for charm to bootstrap and OSD devices to enroll.
+          juju wait-for unit microceph/0 --query='workload-message=="(workload) charm is ready"'
+          bash ./tests/scripts/ci_helpers.sh check_osd_count microceph/0 3
+          date
+
+      - name: Add and relate RadosGW charm
+        run: |
+          set -eux
+          juju deploy ch:ceph-radosgw
+          sleep 120
+          juju integrate ceph-radosgw microceph
+          sleep 420
+          for i in $(seq 1 20); do
+            rgwpools=$(juju ssh microceph/0 -- "sudo microceph.ceph osd pool ls")
+            if echo "$rgwpools" | grep -E 'rgw' ; then
+              echo "Found RadosGW pools"
+              break
+            else
+              echo -n '.'
+              sleep 60
+            fi
+          done
+          rgwpools=$(juju ssh microceph/0 -- "sudo microceph.ceph osd pool ls")
+          if ! echo "$rgwpools" | grep -E "rgw" ; then
+            echo "No RadosGW pools were created"
+            juju ssh microceph/0 -- "sudo microceph.ceph osd pool ls"
+            juju ssh microceph/0 -- "sudo microceph.ceph -s"
+            exit 1
+          fi
