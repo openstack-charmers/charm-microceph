@@ -405,27 +405,5 @@ jobs:
           bash ./tests/scripts/ci_helpers.sh check_osd_count microceph/0 3
           date
 
-      - name: Add and relate RadosGW charm
-        run: |
-          set -eux
-          juju deploy ch:ceph-radosgw
-          sleep 120
-          juju integrate ceph-radosgw microceph
-          sleep 420
-          for i in $(seq 1 20); do
-            rgwpools=$(juju ssh microceph/0 -- "sudo microceph.ceph osd pool ls")
-            if echo "$rgwpools" | grep -E 'rgw' ; then
-              echo "Found RadosGW pools"
-              break
-            else
-              echo -n '.'
-              sleep 60
-            fi
-          done
-          rgwpools=$(juju ssh microceph/0 -- "sudo microceph.ceph osd pool ls")
-          if ! echo "$rgwpools" | grep -E "rgw" ; then
-            echo "No RadosGW pools were created"
-            juju ssh microceph/0 -- "sudo microceph.ceph osd pool ls"
-            juju ssh microceph/0 -- "sudo microceph.ceph -s"
-            exit 1
-          fi
+      - name: Validate the network configurations.
+        run: ./tests/scripts/ci_helpers.sh verify_juju_spaces_config

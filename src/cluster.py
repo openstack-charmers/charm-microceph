@@ -63,11 +63,14 @@ class ClusterNodes(ops.framework.Object):
         """Join node to microceph cluster."""
         if not event.unit:
             return
+
         token = self.charm.peers.get_app_data(f"{event.unit.name}.join_token")
-        cmd = ["microceph", "cluster", "join", token]
+        if not token:
+            event.defer()
+            return
+
         try:
-            logger.debug(f'Running command {" ".join(cmd)}')
-            microceph._run_cmd(cmd)
+            microceph.join_cluster(params=self.charm._get_bootstrap_params(), token=token)
             self.charm.peers.interface.state.joined = True
             self.charm.peers.set_unit_data({"joined": json.dumps(True)})
         except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:

@@ -1,6 +1,7 @@
 options:
   snap-channel:
-    default: "reef/stable"
+    # Revert when join support for --microceph-ip is promoted to stable.
+    default: "reef/edge"
     type: string
     description: |
       The snap-channel option determines the MicroCeph snap that is

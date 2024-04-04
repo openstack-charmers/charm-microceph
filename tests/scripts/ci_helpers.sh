@@ -32,7 +32,7 @@ function install_juju_simple() {
 }
 
 function setup_juju_spaces() {
-    set -x
+    set -ex
     date
     juju add-model spacetest
     juju add-space cluster
@@ -40,8 +40,23 @@ function setup_juju_spaces() {
     juju move-to-space cluster 10.85.4.0/24
 }
 
+function verify_juju_spaces_config() {
+    set -ex
+    date
+    local public="10.196.231.0/24"
+    local cluster="10.85.4.0/24"
+
+    # Verify the cluster network is correct subnet.
+    output=$(juju ssh microceph/0 -- "sudo microceph cluster config get cluster_network")
+    echo $output | grep $cluster
+
+    # Verify the public network is correct subnet.
+    output=$(juju ssh microceph/0 -- "sudo microceph cluster sql 'select value from config where key is \"public_network\"'")
+    echo $output | grep $public
+}
+
 function seed_lxd_profile() {
-    set -x
+    set -ex
     date
     local file_path="${1?missing}"
     lxd init --verbose --preseed < $file_path

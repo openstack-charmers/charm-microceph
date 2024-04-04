@@ -242,19 +242,27 @@ class MicroCephCharm(sunbeam_charm.OSBaseOperatorCharm):
 
     def _get_bootstrap_params(self) -> dict:
         """Fetch bootstrap parameters."""
-        mon_ip = micro_ip = cluster_net = ""
+        micro_ip = cluster_net = public_net = ""
         try:
-            mon_ip = self.model.get_binding(binding_key="public").network.bind_address
-            cluster_nets = self.model.get_binding(binding_key="cluster").network.egress_subnets
+            # Public Network
+            public_nets = self.model.get_binding(binding_key="public").network.interfaces
+            if len(public_nets) > 0:
+                public_net = public_nets[0].subnet
+            # Cluster Network
+            cluster_nets = self.model.get_binding(binding_key="cluster").network.interfaces
             if len(cluster_nets) > 0:
-                cluster_net = cluster_nets[0]
+                cluster_net = cluster_nets[0].subnet
+            # MicroCeph IP
             micro_ip = self.model.get_binding(binding_key="admin").network.bind_address
-            logger.info({"mon_ip": mon_ip, "cluster_net": cluster_net, "micro_ip": micro_ip})
+
+            logger.info(
+                {"public_net": public_net, "cluster_net": cluster_net, "micro_ip": micro_ip}
+            )
         except ops.model.ModelError as e:
             logger.warning(e)
         finally:
             return {
-                "mon_ip": format(mon_ip),
+                "public_net": format(public_net),
                 "cluster_net": format(cluster_net),
                 "micro_ip": format(micro_ip),
             }
