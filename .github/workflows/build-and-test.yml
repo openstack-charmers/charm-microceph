@@ -38,8 +38,7 @@ jobs:
       - name: Setup LXD
         uses: canonical/setup-lxd@v0.1.1
         with:
-          # pin lxd to LTS release.
-          channel: 5.21/stable
+          channel: 5.20/stable
       - name: Build charm(s)
         id: builder
         run: |
