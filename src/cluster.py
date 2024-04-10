@@ -66,6 +66,7 @@ class ClusterNodes(ops.framework.Object):
 
         token = self.charm.peers.get_app_data(f"{event.unit.name}.join_token")
         if not token:
+            logger.info("Token not available, deferring join event.")
             event.defer()
             return
 

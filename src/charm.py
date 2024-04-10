@@ -240,18 +240,20 @@ class MicroCephCharm(sunbeam_charm.OSBaseOperatorCharm):
         if isinstance(event, MicroClusterNodeAddedEvent):
             self.cluster_nodes.join_node_to_cluster(event)
 
+    def _get_space_subnet(self, space: str):
+        """Get the first available subnet in the network space."""
+        space_nets = self.model.get_binding(binding_key=space).network.interfaces
+        if space_nets:
+            return space_nets[0].subnet
+
     def _get_bootstrap_params(self) -> dict:
         """Fetch bootstrap parameters."""
         micro_ip = cluster_net = public_net = ""
         try:
             # Public Network
-            public_nets = self.model.get_binding(binding_key="public").network.interfaces
-            if len(public_nets) > 0:
-                public_net = public_nets[0].subnet
+            public_net = self._get_space_subnet(space="public")
             # Cluster Network
-            cluster_nets = self.model.get_binding(binding_key="cluster").network.interfaces
-            if len(cluster_nets) > 0:
-                cluster_net = cluster_nets[0].subnet
+            cluster_net = self._get_space_subnet(space="cluster")
             # MicroCeph IP
             micro_ip = self.model.get_binding(binding_key="admin").network.bind_address
 
@@ -259,7 +261,7 @@ class MicroCephCharm(sunbeam_charm.OSBaseOperatorCharm):
                 {"public_net": public_net, "cluster_net": cluster_net, "micro_ip": micro_ip}
             )
         except ops.model.ModelError as e:
-            logger.warning(e)
+            logger.exception(e)
         finally:
             return {
                 "public_net": format(public_net),
