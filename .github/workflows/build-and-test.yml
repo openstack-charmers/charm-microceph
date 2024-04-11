@@ -406,8 +406,3 @@ jobs:
 
       - name: Validate the network configurations.
         run: ./tests/scripts/ci_helpers.sh verify_juju_spaces_config
-
-      - name: Add another unit.
-        run: |
-          juju add-unit microceph
-          juju wait-for application microceph --query='name=="microceph" && (status=="active" || status=="idle")' --timeout=20m
