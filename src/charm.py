@@ -249,6 +249,11 @@ class MicroCephCharm(sunbeam_charm.OSBaseOperatorCharm):
     def _get_bootstrap_params(self) -> dict:
         """Fetch bootstrap parameters."""
         micro_ip = cluster_net = public_net = ""
+
+        if "quincy" in self.model.config.get("snap-channel"):
+            # all quincy snap revisions do not support network configuration
+            return {}
+
         try:
             # Public Network
             public_net = self._get_space_subnet(space="public")
