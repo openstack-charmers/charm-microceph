@@ -297,7 +297,7 @@ jobs:
       - name: Install MicroCeph charm
         run: |
           date
-          juju deploy -n 3 ~/artifacts/microceph.charm --config snap-channel=quincy/edge
+          juju deploy -n 3 ~/artifacts/microceph.charm --config snap-channel=quincy/stable
           sleep 15m
           juju debug-log --replay
           juju wait-for application microceph --query='name=="microceph" && (status=="active" || status=="idle")' --timeout=20m
@@ -316,20 +316,20 @@ jobs:
           juju status
           juju status blocked | egrep '^microceph/.*Cannot upgrade.*to non/exist'
           # set back
-          juju config microceph snap-channel=quincy/edge
+          juju config microceph snap-channel=quincy/stable
           sleep 10
 
       - name: Test upgrading with unhealthy cluster blocks
         run: |
           set -eux
-          juju config microceph snap-channel=reef/stable
+          juju config microceph snap-channel=quincy/edge
           sleep 10
           juju wait-for application microceph --query='status=="blocked"'
           juju status
           juju status blocked | egrep '^microceph/.*Cannot upgrade, ceph health not ok'
           # Should be in WARN as we don't have OSDs
           juju ssh microceph/0 -- sudo ceph -s
-          juju config microceph snap-channel=quincy/edge
+          juju config microceph snap-channel=quincy/stable
           juju wait-for application microceph --query='name=="microceph" && (status=="active" || status=="idle")' --timeout=20m
 
       - name: Add disks and configure pool size for health
