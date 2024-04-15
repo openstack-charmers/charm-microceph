@@ -71,7 +71,7 @@ class ClusterNodes(ops.framework.Object):
             return
 
         try:
-            microceph.join_cluster(params=self.charm._get_bootstrap_params(), token=token)
+            microceph.join_cluster(token=token, **self.charm._get_bootstrap_params())
             self.charm.peers.interface.state.joined = True
             self.charm.peers.set_unit_data({"joined": json.dumps(True)})
         except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:

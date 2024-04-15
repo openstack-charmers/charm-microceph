@@ -18,7 +18,7 @@ tags:
   - misc
 
 extra-bindings:
-  # Cluster public services bind to this space.
+  # Cluster public services bind to this space for consumption by Ceph clients
   public:
   # Cluster internal services bind to this space.
   cluster:

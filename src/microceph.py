@@ -83,12 +83,8 @@ def is_cluster_member(hostname: str) -> bool:
             raise e
 
 
-def bootstrap_cluster(params: dict):
+def bootstrap_cluster(micro_ip: str = None, public_net: str = None, cluster_net: str = None):
     """Bootstrap MicroCeph cluster."""
-    micro_ip = params.get("micro_ip", None)
-    public_net = params.get("public_net", None)
-    cluster_net = params.get("cluster_net", None)
-
     cmd = ["microceph", "cluster", "bootstrap"]
 
     if public_net:
@@ -103,10 +99,8 @@ def bootstrap_cluster(params: dict):
     _run_cmd(cmd=cmd)
 
 
-def join_cluster(params: dict, token: str):
+def join_cluster(token: str, micro_ip: str = None, **kwargs):
     """Join node to MicroCeph cluster."""
-    micro_ip = params.get("micro_ip", None)
-
     cmd = ["microceph", "cluster", "join", token]
 
     if micro_ip:

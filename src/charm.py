@@ -251,7 +251,8 @@ class MicroCephCharm(sunbeam_charm.OSBaseOperatorCharm):
         micro_ip = cluster_net = public_net = ""
 
         if "quincy" in self.model.config.get("snap-channel"):
-            # all quincy snap revisions do not support network configuration
+            # some quincy snap revisions do not support network configuration
+            logger.warning("Juju spaces incompatible with quincy revision snaps")
             return {}
 
         try:
@@ -277,7 +278,7 @@ class MicroCephCharm(sunbeam_charm.OSBaseOperatorCharm):
     def bootstrap_cluster(self, event: ops.framework.EventBase) -> None:
         """Bootstrap microceph cluster."""
         try:
-            microceph.bootstrap_cluster(self._get_bootstrap_params())
+            microceph.bootstrap_cluster(**self._get_bootstrap_params())
         except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
             logger.warning(e.stderr)
             hostname = gethostname()
