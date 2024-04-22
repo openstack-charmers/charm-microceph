@@ -154,6 +154,11 @@ def remove_disk_cmd(osd_num: int, force: bool = False) -> None:
     cmd = ["microceph", "disk", "remove", str(osd_num)]
     if force:
         cmd.append("--bypass-safety-checks")
+        # NOTE(utkarshbhatthere): Force removal of OSD is performed when the
+        # action causes osd count to fall below three across unique hosts.
+        # The flag below prevents automatic scaledown of failure domain to OSD
+        # as it makes the storage cluster unsafe against host failures.
+        cmd.append("--prohibit-crush-scaledown")
     _run_cmd(cmd)
 
 

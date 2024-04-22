@@ -64,6 +64,13 @@ function seed_lxd_profile() {
     lxc network list
 }
 
+function wait_for_microceph_bootstrap() {
+    # wait for install hook to trigger on one unit.
+    juju wait-for unit microceph/0 --query='workload-message=="(install) (bootstrap) Service not bootstrapped"' --timeout=20m
+    # Now wait for the model to settle.
+    juju wait-for application microceph --query='name=="microceph" && (status=="active" || status=="idle")' --timeout=10m
+}
+
 run="${1}"
 shift
 

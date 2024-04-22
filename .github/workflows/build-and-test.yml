@@ -145,7 +145,7 @@ jobs:
         run: |
           date
           juju deploy -n 3 ~/artifacts/microceph.charm
-          juju wait-for application microceph --query='name=="microceph" && (status=="active" || status=="idle")' --timeout=20m
+          ./tests/scripts/ci_helpers.sh wait_for_microceph_bootstrap
           date
 
       - name: Show Juju status
@@ -165,7 +165,7 @@ jobs:
           set -x
           juju remove-unit microceph/2 --no-prompt
           # wait and check if the unit is still present.
-          for i in $(seq 1 20); do
+          for i in $(seq 1 40); do
             res=$( ( juju status | grep -cF "microceph/2" ) || true )
             if [[ $res -gt 0 ]] ; then
               echo -n '.'
@@ -216,9 +216,9 @@ jobs:
           set -eux
           date
           # constraints to deploy on virtual machine.
-          juju deploy ~/artifacts/microceph.charm --storage osd-standalone='4G,3' --constraints="virt-type=virtual-machine root-disk=40G mem=8G"
+          juju deploy ~/artifacts/microceph.charm --storage osd-standalone='2G,3' --constraints="virt-type=virtual-machine root-disk=50G mem=8G"
           # wait for charm to bootstrap and OSD devices to enroll.
-          juju wait-for unit microceph/0 --query='workload-message=="(workload) charm is ready"'
+          juju wait-for unit microceph/0 --timeout '30m' --query='workload-message=="(workload) charm is ready"'
           bash ./tests/scripts/ci_helpers.sh check_osd_count microceph/0 3
           date
 
@@ -227,13 +227,16 @@ jobs:
           set -eux
           juju detach-storage osd-standalone/0
           juju wait-for unit microceph/0 --query='workload-status=="blocked"'
+          # wait before completely removing the storage.
+          sleep 1m
+          juju remove-storage osd-standalone/0
           bash tests/scripts/ci_helpers.sh check_osd_count microceph/0 2
           date
 
       - name: Add another OSD
         run: |
           set -eux
-          juju add-storage microceph/0 osd-standalone='4G,1'
+          juju add-storage microceph/0 osd-standalone='2G,1'
           juju wait-for unit microceph/0 --timeout '20m' --query='workload-message=="(workload) charm is ready"'
           bash tests/scripts/ci_helpers.sh check_osd_count microceph/0 3
           date
@@ -296,7 +299,7 @@ jobs:
         run: |
           date
           juju deploy -n 3 ~/artifacts/microceph.charm --config snap-channel=quincy/stable
-          juju wait-for application microceph --query='name=="microceph" && (status=="active" || status=="idle")' --timeout=20m
+          ./tests/scripts/ci_helpers.sh wait_for_microceph_bootstrap
           date
 
       - name: Show Juju status
@@ -307,7 +310,8 @@ jobs:
       - name: Test non-existing channel
         run: |
           set -eux
-          juju config microceph snap-channel=non/exist
+          juju status
+          juju config microceph snap-channel="non/exist"
           juju wait-for application microceph --query='status=="blocked"'
           juju status
           juju status blocked | egrep '^microceph/.*Cannot upgrade.*to non/exist'
@@ -341,7 +345,7 @@ jobs:
           set -eux
           date
           juju config microceph snap-channel=reef/stable
-          juju wait-for application microceph --query='forEach(units, unit => unit.workload-status=="active" && unit.agent-status=="idle")' --timeout=20m
+          juju wait-for application microceph --query='forEach(units, unit => unit.workload-status=="active" && unit.agent-status=="idle")' --timeout=30m
           juju ssh microceph/0 -- sudo ceph -s
           juju status
           date

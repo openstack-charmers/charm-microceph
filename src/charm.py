@@ -91,8 +91,6 @@ class MicroCephCharm(sunbeam_charm.OSBaseOperatorCharm):
 
         try:
             snap.SnapCache()["microceph"].hold()
-            # Temporary fix while the auto connect request for the interface is accepted.
-            snap.SnapCache()["microceph"].connect("mount-observe")
         except Exception:
             logger.exception("Failed to hold microceph refresh: ")
 
@@ -262,8 +260,9 @@ class MicroCephCharm(sunbeam_charm.OSBaseOperatorCharm):
     def _get_bootstrap_params(self) -> dict:
         """Fetch bootstrap parameters."""
         micro_ip = cluster_net = public_net = ""
+        snap_channel = snap.SnapCache()["microceph"].channel
 
-        if "quincy" in self.model.config.get("snap-channel"):
+        if "quincy" in snap_channel:
             # some quincy snap revisions do not support network configuration
             logger.warning("Juju spaces incompatible with quincy revision snaps")
             return {}
@@ -277,7 +276,12 @@ class MicroCephCharm(sunbeam_charm.OSBaseOperatorCharm):
             micro_ip = self.model.get_binding(binding_key="admin").network.bind_address
 
             logger.info(
-                {"public_net": public_net, "cluster_net": cluster_net, "micro_ip": micro_ip}
+                {
+                    "snap-channel": snap_channel,
+                    "public_net": public_net,
+                    "cluster_net": cluster_net,
+                    "micro_ip": micro_ip,
+                }
             )
         except ops.model.ModelError as e:
             logger.exception(e)
