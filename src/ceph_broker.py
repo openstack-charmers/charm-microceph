@@ -257,6 +257,7 @@ def _get_broker_jump_table():
         "move-osd-to-bucket": handle_put_osd_in_bucket,
         "add-permissions-to-key": handle_add_permissions_to_key,
         "set-key-permissions": handle_set_key_permissions,
+        "create-cephfs-client": handle_create_cephfs_client,
     }
 
     _BROKER_JUMP_TABLE = ret
@@ -1061,6 +1062,55 @@ def handle_add_permissions_to_key(request, service):
     update_service_permissions(service_name, service_obj, group_namespace)
 
     return resp
+
+
+def handle_create_cephfs_client(request, service):
+    """Creates a new CephFS client for a filesystem.
+
+    :param request: The broker request
+    :param service: The ceph client to run the command under.
+    :returns: dict. exit-code and reason if not 0.
+    """
+    fs_name = request.get("fs_name")
+    client_id = request.get("client_id")
+    # TODO: fs allows setting write permissions for a list of paths.
+    path = request.get("path")
+    perms = request.get("perms")
+    # Need all parameters
+    if not fs_name or not client_id or not path or not perms:
+        msg = "Missing fs_name, client_id, path or perms params"
+        log(msg, level=ERROR)
+        return {"exit-code": 1, "stderr": msg}
+
+    client = "client.{}".format(client_id)
+
+    # Try to authorize the client.
+    # `ceph fs authorize` already returns the correct error
+    # message if the filesystem doesn't exist or if the client
+    # already exists.
+    try:
+        cmd = [
+            "ceph",
+            "--id",
+            service,
+            "fs",
+            "authorize",
+            fs_name,
+            client,
+            path,
+            perms,
+            "-f",
+            "json",
+        ]
+        fs_auth = json.loads(check_output(cmd, encoding="utf-8"))
+    except CalledProcessError as err:
+        log(err.output, level=ERROR)
+        return {"exit-code": 1, "stderr": err.output}
+    except ValueError as err:
+        log(str(err), level=ERROR)
+        return {"exit-code": 1, "stderr": str(err)}
+
+    return {"exit-code": 0, "key": fs_auth[0]["key"]}
 
 
 def save_service(service_name, service):

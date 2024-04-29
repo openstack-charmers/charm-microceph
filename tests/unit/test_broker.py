@@ -12,7 +12,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from unittest.mock import MagicMock, patch
+import json
+import textwrap
+from unittest.mock import DEFAULT, MagicMock, patch
 
 import ops_sunbeam.test_utils as test_utils
 
@@ -198,3 +200,57 @@ class TestBroker(test_utils.CharmTestCase):
             req["op"] = op
             ret = broker.process_requests_v1(reqs)
             self.assertEqual(ret["exit-code"], 0)
+
+    @patch.object(broker, "check_output")
+    @patch.object(broker, "log")
+    def test_create_cephfs_client(self, mock_log, check_output):
+        def mock_check_output(*args, **kwargs):
+            cmd = args[0]
+            if cmd[:9] == [
+                "ceph",
+                "--id",
+                "admin",
+                "fs",
+                "authorize",
+                "filesystem",
+                "client.fs-client",
+                "/",
+                "rw",
+            ]:
+                return textwrap.dedent(
+                    """
+                [
+                    {
+                        "entity": "client.fs-client",
+                        "key": "fs-client-key",
+                        "caps": {
+                            "mds": "allow rw fsname=filesystem",
+                            "mon": "allow r fsname=filesystem",
+                            "osd": "allow rw tag cephfs data=filesystem"
+                        }
+                    }
+                ]
+                """
+                )
+            return DEFAULT
+
+        check_output.side_effect = mock_check_output
+        reqs = json.dumps(
+            {
+                "api-version": 1,
+                "request-id": "1ef5aede",
+                "ops": [
+                    {
+                        "op": "create-cephfs-client",
+                        "fs_name": "filesystem",
+                        "client_id": "fs-client",
+                        "path": "/",
+                        "perms": "rw",
+                    }
+                ],
+            }
+        )
+        rc = json.loads(broker.process_requests(reqs))
+        self.assertEqual(rc["exit-code"], 0)
+        self.assertEqual(rc["request-id"], "1ef5aede")
+        self.assertEqual(rc["key"], "fs-client-key")
