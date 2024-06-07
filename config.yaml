@@ -14,3 +14,9 @@ options:
       The default replication factor for pools. Note that changing
       this value only sets the default value; it doesn't change
       the replication factor for existing pools.
+  enable-rgw:
+    default: False
+    type: boolean
+    description: |
+      Setting this parameter to true enables ceph rados gateway
+      on all the storage nodes.

@@ -84,7 +84,7 @@ jobs:
 
       - name: Get actionutils
         run: |
-          curl -sL https://raw.githubusercontent.com/canonical/microceph/main/tests/scripts/actionutils.sh -o ~/actionutils.sh
+          curl -sL https://raw.githubusercontent.com/hemanthnakkina/microceph/wait-for-rgw/tests/scripts/actionutils.sh -o ~/actionutils.sh
           chmod +x ~/actionutils.sh
 
       - name: Upgrade to locally built charm
@@ -111,6 +111,12 @@ jobs:
           sudo microceph.ceph -s
           ~/actionutils.sh wait_for_osds 3
           sudo microceph.ceph -s
+
+      - name: Enable RGW
+        run: |
+          set -eux
+          juju config microceph enable-rgw=True
+          ~/actionutils.sh wait_for_rgw 1
 
   juju-cluster-test:
     needs:

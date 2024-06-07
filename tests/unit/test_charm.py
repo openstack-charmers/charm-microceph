@@ -49,12 +49,14 @@ class TestCharm(test_utils.CharmTestCase):
         self.addCleanup(self.harness.cleanup)
         self.harness.begin()
 
+    @patch.object(microceph, "Client")
     @patch.object(microceph, "subprocess")
-    def test_all_relations(self, subprocess):
+    def test_all_relations(self, subprocess, cclient):
         """Test all the charms relations."""
         self.harness.set_leader()
         self.harness.update_config({"snap-channel": "1.0/stable"})
         test_utils.add_complete_peer_relation(self.harness)
+        cclient().cluster.list_services.return_value = []
         subprocess.run.assert_any_call(
             [
                 "microceph",
@@ -66,6 +68,43 @@ class TestCharm(test_utils.CharmTestCase):
                 "10.0.0.0/24",
                 "--microceph-ip",
                 "10.0.0.10",
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=180,
+        )
+
+    @patch.object(microceph, "Client")
+    @patch.object(microceph, "subprocess")
+    def test_all_relations_with_enable_rgw_config(self, subprocess, cclient):
+        """Test all the charms relations."""
+        self.harness.set_leader()
+        self.harness.update_config({"snap-channel": "1.0/stable", "enable-rgw": True})
+        test_utils.add_complete_peer_relation(self.harness)
+        cclient().cluster.list_services.return_value = []
+        subprocess.run.assert_any_call(
+            [
+                "microceph",
+                "cluster",
+                "bootstrap",
+                "--public-network",
+                "10.0.0.0/24",
+                "--cluster-network",
+                "10.0.0.0/24",
+                "--microceph-ip",
+                "10.0.0.10",
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
+            timeout=180,
+        )
+        subprocess.run.assert_any_call(
+            [
+                "microceph",
+                "enable",
+                "rgw",
             ],
             capture_output=True,
             text=True,

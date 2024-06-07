@@ -35,6 +35,7 @@ from ops.main import main
 import cluster
 import microceph
 from ceph_broker import get_named_key
+from clusterclient import ClusterServiceUnavailableException
 from relation_handlers import (
     CephClientProviderHandler,
     CephMdsProviderHandler,
@@ -242,6 +243,7 @@ class MicroCephCharm(sunbeam_charm.OSBaseOperatorCharm):
             self.peers.interface.state.joined = True
 
         self.set_leader_ready()
+        self.enable_rgw(event)
         snap_chan = self.model.config.get("snap-channel")
 
         if self.cluster_upgrades.upgrade_requested(snap_chan):
@@ -258,6 +260,8 @@ class MicroCephCharm(sunbeam_charm.OSBaseOperatorCharm):
         super().configure_app_non_leader(event)
         if isinstance(event, MicroClusterNodeAddedEvent):
             self.cluster_nodes.join_node_to_cluster(event)
+
+        self.enable_rgw(event)
 
     def _get_space_subnet(self, space: str):
         """Get the first available subnet in the network space."""
@@ -316,6 +320,24 @@ class MicroCephCharm(sunbeam_charm.OSBaseOperatorCharm):
 
             if error_already_exists not in e.stderr:
                 raise e
+
+    def enable_rgw(self, event: ops.framework.EventBase) -> None:
+        """Enable/Disable RGW service."""
+        try:
+            enabled = microceph.is_rgw_enabled(gethostname())
+            print(f"enabled rgw: {enabled}")
+            if self.model.config.get("enable-rgw"):
+                if not enabled:
+                    microceph.enable_rgw()
+            else:
+                if enabled:
+                    microceph.disable_rgw()
+        except ClusterServiceUnavailableException as e:
+            logger.warning(str(e))
+            event.defer()
+        except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
+            logger.warning(e.stderr)
+            raise e
 
     def configure_ceph(self, event) -> None:
         """Configure Ceph."""

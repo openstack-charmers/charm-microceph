@@ -5,5 +5,10 @@ netifaces
 jsonschema
 tenacity
 jinja2
-requests
+requests<2.32
 git+https://opendev.org/openstack/sunbeam-charms/#egg=ops-sunbeam&subdirectory=ops-sunbeam
+
+# Used for communication with snapd socket
+requests-unixsocket # Apache 2
+urllib3<2 # https://github.com/psf/requests/issues/6432
+

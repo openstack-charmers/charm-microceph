@@ -24,6 +24,8 @@ from typing import Tuple
 
 import requests
 
+from clusterclient import Client
+
 logger = logging.getLogger(__name__)
 
 MAJOR_VERSIONS = {
@@ -83,6 +85,21 @@ def is_cluster_member(hostname: str) -> bool:
             raise e
 
 
+def is_rgw_enabled(hostname: str) -> bool:
+    """Check if RGW service is enabled on host.
+
+    Raises ClusterServiceUnavailableException if cluster is not available.
+    """
+    client = Client.from_socket()
+    services = client.cluster.list_services()
+    print(services)
+    for service in services:
+        if service["service"] == "rgw" and service["location"] == hostname:
+            return True
+
+    return False
+
+
 def bootstrap_cluster(micro_ip: str = None, public_net: str = None, cluster_net: str = None):
     """Bootstrap MicroCeph cluster."""
     cmd = ["microceph", "cluster", "bootstrap"]
@@ -107,6 +124,18 @@ def join_cluster(token: str, micro_ip: str = None, **kwargs):
         cmd.extend(["--microceph-ip", micro_ip])
 
     _run_cmd(cmd=cmd)
+
+
+def enable_rgw() -> None:
+    """Enable RGW service."""
+    cmd = ["microceph", "enable", "rgw"]
+    _run_cmd(cmd)
+
+
+def disable_rgw() -> None:
+    """Disable RGW service."""
+    cmd = ["microceph", "disable", "rgw"]
+    _run_cmd(cmd)
 
 
 # Disk CMDs and Helpers
