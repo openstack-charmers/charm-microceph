@@ -104,12 +104,13 @@ class TestCharm(test_utils.CharmTestCase):
     @patch("builtins.open", new_callable=mock_open, read_data="mon host dummy-ip")
     def test_all_relations(self, mock_file, subprocess, cclient):
         """Test all the charms relations."""
+        cclient.from_socket().cluster.list_services.return_value = []
+
         self.harness.set_leader()
         self.harness.update_config({"snap-channel": "1.0/stable"})
         self.add_complete_peer_relation(self.harness)
         self.add_complete_identity_relation(self.harness)
         self.add_complete_ingress_relation(self.harness)
-        cclient().cluster.list_services.return_value = []
         subprocess.run.assert_any_call(
             [
                 "microceph",
@@ -127,11 +128,6 @@ class TestCharm(test_utils.CharmTestCase):
             check=True,
             timeout=180,
         )
-        # Remove RGW configs when RGW is not enabled
-        # The function might be called more than one time as it is part of
-        # configure_charm and so assert any one removal of config instead
-        # of call count.
-        cclient.from_socket().cluster.delete_config.assert_any_call("rgw_keystone_url")
 
         # Assert RGW update configs is not called
         cclient.from_socket().cluster.update_config.assert_not_called()
@@ -141,12 +137,13 @@ class TestCharm(test_utils.CharmTestCase):
     @patch("builtins.open", new_callable=mock_open, read_data="mon host dummy-ip")
     def test_all_relations_with_enable_rgw_config(self, mock_file, subprocess, cclient):
         """Test all the charms relations."""
+        cclient.from_socket().cluster.list_services.return_value = []
+
         self.harness.set_leader()
         self.harness.update_config({"snap-channel": "1.0/stable", "enable-rgw": "*"})
         test_utils.add_complete_peer_relation(self.harness)
         self.add_complete_identity_relation(self.harness)
         self.add_complete_ingress_relation(self.harness)
-        cclient().cluster.list_services.return_value = []
         subprocess.run.assert_any_call(
             [
                 "microceph",
@@ -189,6 +186,8 @@ class TestCharm(test_utils.CharmTestCase):
         self, mock_file, subprocess, cclient
     ):
         """Test all the charms relations."""
+        cclient.from_socket().cluster.list_services.return_value = []
+
         self.harness.set_leader()
         self.harness.update_config(
             {"snap-channel": "1.0/stable", "enable-rgw": "*", "namespace-projects": True}
@@ -196,7 +195,6 @@ class TestCharm(test_utils.CharmTestCase):
         test_utils.add_complete_peer_relation(self.harness)
         self.add_complete_identity_relation(self.harness)
         self.add_complete_ingress_relation(self.harness)
-        cclient().cluster.list_services.return_value = []
         subprocess.run.assert_any_call(
             [
                 "microceph",

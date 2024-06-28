@@ -133,7 +133,9 @@ def delete_cluster_configs(configs: list):
     Raises ClusterServiceUnavailableException
     """
     client = Client.from_socket()
-    for key in configs:
+    configs_from_db = list_cluster_configs()
+    configs_to_delete = set(configs) & set(configs_from_db.keys())
+    for key in configs_to_delete:
         try:
             logger.debug(f"Removing microceph cluster config {key}")
             client.cluster.delete_config(key)
