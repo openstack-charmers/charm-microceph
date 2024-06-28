@@ -76,6 +76,7 @@ jobs:
           date
           sudo snap install openstack --channel 2023.2
           sunbeam prepare-node-script | bash -x
+          sudo snap refresh juju --channel 3.4/stable
           sg snap_daemon "sunbeam cluster bootstrap --accept-defaults"
           sg snap_daemon "sunbeam cluster list"
           juju status -m admin/controller
