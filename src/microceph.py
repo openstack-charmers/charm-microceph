@@ -23,6 +23,7 @@ import subprocess
 from typing import Tuple
 
 import requests
+from tenacity import retry, stop_after_attempt, wait_fixed
 
 from microceph_client import Client, UnrecognizedClusterConfigOption
 
@@ -253,7 +254,7 @@ def enroll_disks_as_osds(disks: list) -> None:
     # pass disks as space separated arguments.
     add_batch_osds(available_disks)
 
-
+@retry(wait=wait_fixed(5), stop=stop_after_attempt(20))
 def _get_disk_info(disk: str) -> dict:
     """Fetches disk info from lsblk as a python dict."""
     try:
