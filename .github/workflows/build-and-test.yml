@@ -536,3 +536,7 @@ jobs:
           fi
           # check if the ceph-mds daemon is running
           juju ssh ceph-fs/0 -- 'sudo systemctl is-active ceph-mds@$HOSTNAME.service --quiet'
+
+      - name: Setup tmate session
+        if: ${{ failure() && runner.debug }}
+        uses: canonical/action-tmate@main
