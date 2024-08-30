@@ -57,7 +57,7 @@ jobs:
       - unit-test
       - build
     name: Functional test
-    runs-on: [self-hosted, xlarge]
+    runs-on: [self-hosted, xlarge, jammy, x64]
     steps:
 
       - name: Download charm
@@ -141,7 +141,7 @@ jobs:
       - unit-test
       - build
     name: Juju cluster test
-    runs-on: [self-hosted, xlarge]
+    runs-on: [self-hosted, xlarge, jammy, x64]
     steps:
 
       - name: Download charm
@@ -227,7 +227,7 @@ jobs:
       - unit-test
       - build
     name: Juju single test
-    runs-on: [self-hosted, xlarge]
+    runs-on: [self-hosted, xlarge, jammy, x64]
     steps:
 
       - name: Download charm
@@ -311,7 +311,7 @@ jobs:
       - unit-test
       - build
     name: Juju upgrade test
-    runs-on: [self-hosted, xlarge]
+    runs-on: [self-hosted, xlarge, jammy, x64]
     steps:
 
       - name: Download charm
@@ -441,7 +441,7 @@ jobs:
       - unit-test
       - build
     name: Juju Network spaces test
-    runs-on: [self-hosted, xlarge]
+    runs-on: [self-hosted, xlarge, jammy, x64]
     steps:
 
       - name: Download charm
@@ -494,7 +494,7 @@ jobs:
       - unit-test
       - build
     name: Juju mds test
-    runs-on: [self-hosted, xlarge]
+    runs-on: [self-hosted, xlarge, jammy, x64]
     steps:
 
       - name: Download charm
