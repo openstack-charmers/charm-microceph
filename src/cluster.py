@@ -45,11 +45,11 @@ class ClusterNodes(ops.framework.Object):
         """Add node to microceph cluster."""
         if not event.unit:
             return
-        cmd = ["microceph", "cluster", "add", event.unit.name]
+        cmd = ["microceph", "cluster", "add", event.unit.name.replace('/','-')]
         try:
             out = microceph._run_cmd(cmd)
             token = out.strip()
-            self.charm.peers.set_app_data({f"{event.unit.name}.join_token": token})
+            self.charm.peers.set_app_data({f"{event.unit.name.replace('/','-')}.join_token": token})
         except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
             logger.warning(e.stderr)
             error_node_already_exists = (
@@ -64,7 +64,7 @@ class ClusterNodes(ops.framework.Object):
         if not event.unit:
             return
 
-        token = self.charm.peers.get_app_data(f"{event.unit.name}.join_token")
+        token = self.charm.peers.get_app_data(f"{event.unit.name.replace('/','-')}.join_token")
         if not token:
             logger.info("Token not available, deferring join event.")
             event.defer()
