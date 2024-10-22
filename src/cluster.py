@@ -46,7 +46,9 @@ class ClusterNodes(ops.framework.Object):
         if not event.unit:
             return
         # get hostname using unit name.
-        hostnames = self.charm.peers.get_all_unit_values(key=event.unit.name, include_local_unit=True)
+        hostnames = self.charm.peers.get_all_unit_values(
+            key=event.unit.name, include_local_unit=True
+        )
         if not hostnames:
             event.defer()
 
@@ -54,9 +56,7 @@ class ClusterNodes(ops.framework.Object):
         try:
             out = microceph._run_cmd(cmd)
             token = out.strip()
-            self.charm.peers.set_app_data(
-                {f"{event.unit.name}.join_token": token}
-            )
+            self.charm.peers.set_app_data({f"{event.unit.name}.join_token": token})
         except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
             logger.warning(e.stderr)
             error_node_already_exists = (

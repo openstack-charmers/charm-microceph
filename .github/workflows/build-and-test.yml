@@ -54,7 +54,6 @@ jobs:
   functional-test:
     needs:
       - lint
-      - unit-test
       - build
     name: Functional test
     runs-on: [self-hosted, xlarge]
@@ -138,7 +137,6 @@ jobs:
   juju-cluster-test:
     needs:
       - lint
-      - unit-test
       - build
     name: Juju cluster test
     runs-on: [self-hosted, xlarge]
@@ -224,7 +222,6 @@ jobs:
   juju-single-test:
     needs:
       - lint
-      - unit-test
       - build
     name: Juju single test
     runs-on: [self-hosted, xlarge]
@@ -308,7 +305,6 @@ jobs:
   juju-upgrade-test:
     needs:
       - lint
-      - unit-test
       - build
     name: Juju upgrade test
     runs-on: [self-hosted, xlarge]
@@ -438,7 +434,6 @@ jobs:
   juju-network-spaces-test:
     needs:
       - lint
-      - unit-test
       - build
     name: Juju Network spaces test
     runs-on: [self-hosted, xlarge]
@@ -491,7 +486,6 @@ jobs:
   juju-mds-test:
     needs:
       - lint
-      - unit-test
       - build
     name: Juju mds test
     runs-on: [self-hosted, xlarge]
