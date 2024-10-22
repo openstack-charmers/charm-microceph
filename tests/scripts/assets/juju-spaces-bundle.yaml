@@ -1,4 +1,4 @@
-default-base: ubuntu@22.04/stable
+default-base: ubuntu@24.04/stable
 applications:
   microceph:
     charm: ./microceph.charm
