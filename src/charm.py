@@ -91,7 +91,7 @@ class MicroCephCharm(sunbeam_charm.OSBaseOperatorCharm):
         ]
 
         logger.debug(f'Running command {" ".join(cmd)}')
-        process = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=180)
+        process = subprocess.run(cmd, capture_output=True, text=True, check=True, timeout=900)
         logger.debug(f"Command finished. stdout={process.stdout}, " f"stderr={process.stderr}")
 
         cmd = ["sudo", "snap", "alias", "microceph.ceph", "ceph"]

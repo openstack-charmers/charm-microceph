@@ -54,7 +54,7 @@ storage:
     type: block
     multiple:
       range: 0-
-    minimum-size: 2G
+    minimum-size: 1G
 
   # Juju can provision storage, but charm will not perform any action.
   manual:
