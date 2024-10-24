@@ -34,7 +34,7 @@ function install_juju_simple() {
 function setup_juju_spaces() {
     set -ex
     date
-    juju add-model spacetest
+    juju add-model microceph-test
     juju add-space cluster
     # Subnet value from LXD profile.
     juju move-to-space cluster 10.85.4.0/24
@@ -71,6 +71,23 @@ function wait_for_microceph_bootstrap() {
     juju wait-for application microceph --query='name=="microceph" && (status=="active" || status=="idle")' --timeout=10m
 }
 
+function juju_crashdump() {
+    local model=${1:-microceph-test}
+    if ! snap list | grep -q "^juju-crashdump"; then
+        sudo snap install --classic juju-crashdump
+    fi
+    juju-crashdump \
+      -m $model \
+      -o logs \
+      -a juju-show-unit \
+      -a juju-show-unit \
+      -a juju-show-status-log \
+      -a sosreport \
+      --as-root \
+      -j '*' \
+      /var/snap/microceph/
+}
+
 function collect_microceph_logs() {
     mkdir -p logs
     local model=${1:-microceph-test}
@@ -82,6 +99,7 @@ function collect_microceph_logs() {
     juju ssh microceph/leader sudo microceph.ceph status &> logs/ceph-status.txt || true
     cat logs/$model_.yaml
     cat logs/microceph-status.txt
+    juju_crashdump $model
 }
 
 function collect_sunbeam_and_microceph_logs() {
@@ -99,6 +117,7 @@ function collect_sunbeam_and_microceph_logs() {
       do
         sudo $kubectl logs --ignore-errors -n $name --all-containers $pod &> logs/$pod.log || echo "Not able to get log for $pod"
       done
+      juju_crashdump $model
     done
     juju ssh microceph/leader sudo microceph status &> logs/microceph-status.txt || true
     juju ssh microceph/leader sudo microceph.ceph status &> logs/ceph-status.txt || true

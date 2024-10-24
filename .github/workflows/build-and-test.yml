@@ -120,11 +120,11 @@ jobs:
           ~/actionutils.sh wait_for_rgw 1
 
       - name: Collect logs
-        if: always()
+        if: failure()
         run: ./tests/scripts/ci_helpers.sh collect_sunbeam_and_microceph_logs
 
       - name: Upload logs
-        if: always()
+        if: failure()
         uses: actions/upload-artifact@v3
         with:
           name: microceph_juju_functional_test_logs
@@ -206,11 +206,11 @@ jobs:
           fi
 
       - name: Collect logs
-        if: always()
+        if: failure()
         run: ./tests/scripts/ci_helpers.sh collect_microceph_logs
 
       - name: Upload logs
-        if: always()
+        if: failure()
         uses: actions/upload-artifact@v3
         with:
           name: microceph_juju_cluster_test_logs
@@ -420,11 +420,11 @@ jobs:
           juju status blocked | egrep '^microceph/.*Cannot upgrade.*to quincy/stable'
 
       - name: Collect logs
-        if: always()
+        if: failure()
         run: ./tests/scripts/ci_helpers.sh collect_microceph_logs
 
       - name: Upload logs
-        if: always()
+        if: failure()
         uses: actions/upload-artifact@v3
         with:
           name: microceph_juju_upgrade_test_logs
@@ -459,7 +459,7 @@ jobs:
         uses: canonical/setup-lxd@v0.1.1
         with:
           # pin lxd since there were some recurring issues in recent releases.
-          channel: 5.21/stable
+          channel: 5.0/stable
 
       - name: Seed preliminary LXD profile
         run: ./tests/scripts/ci_helpers.sh seed_lxd_profile ./tests/scripts/assets/lxd-preseed.yaml
@@ -489,6 +489,24 @@ jobs:
 
       - name: Validate the network configurations.
         run: ./tests/scripts/ci_helpers.sh verify_juju_spaces_config
+
+      - name: Collect logs
+        if: failure()
+        run: ./tests/scripts/ci_helpers.sh collect_microceph_logs
+
+      - name: Upload logs
+        if: failure()
+        uses: actions/upload-artifact@v3
+        with:
+          name: microceph_juju_network_spaces_test_logs
+          path: logs
+          retention-days: 30
+
+      - name: Setup tmate session
+        if: ${{ failure() && runner.debug }}
+        uses: canonical/action-tmate@main
+
+
 
   juju-mds-test:
     needs:
@@ -547,3 +565,20 @@ jobs:
           fi
           # check if the ceph-mds daemon is running
           juju ssh ceph-fs/0 -- 'sudo systemctl is-active ceph-mds@$HOSTNAME.service --quiet'
+
+      - name: Collect logs
+        if: failure()
+        run: ./tests/scripts/ci_helpers.sh collect_microceph_logs
+
+      - name: Upload logs
+        if: failure()
+        uses: actions/upload-artifact@v3
+        with:
+          name: microceph_juju_mds_test_logs
+          path: logs
+          retention-days: 30
+
+      - name: Setup tmate session
+        if: ${{ failure() && runner.debug }}
+        uses: canonical/action-tmate@main
+
