@@ -21,6 +21,12 @@ storage_pools:
   driver: dir
 profiles:
 - config:
+    cloud-init.user-data: |
+      #cloud-config
+      users:
+        - name: root  
+          ssh_authorized_keys:
+            - ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOJVHsirs0VhbRPL8mpBmawLRfIxKvyxhSoqb8IeIdjr  
     cloud-init.network-config: |
       #cloud-config
       network:

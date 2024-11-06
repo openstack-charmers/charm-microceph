@@ -13,6 +13,3 @@ applications:
       "": alpha
       cluster: cluster
       public: alpha
-machines:
-  "0":
-    constraints: arch=amd64 virt-type=virtual-machine root-disk=32G

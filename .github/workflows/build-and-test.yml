@@ -479,9 +479,10 @@ jobs:
           set -eux
           date
           mv ~/artifacts/microceph.charm ./tests/scripts/assets/
-          juju deploy ./tests/scripts/assets/juju-spaces-bundle.yaml
+       
+          bash ./tests/scripts/ci_helpers.sh setup_network_spaces_env 
           # wait for charm to bootstrap and OSD devices to enroll.
-          sleep 10m
+          sleep 5m
           juju status
           juju wait-for unit microceph/0 --query='workload-message=="(workload) charm is ready"' --timeout=20m
           bash ./tests/scripts/ci_helpers.sh check_osd_count microceph/0 3
