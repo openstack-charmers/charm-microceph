@@ -125,7 +125,7 @@ function collect_sunbeam_and_microceph_logs() {
 
 function setup_network_spaces_env() {
   # Create lxd machine with configured ssh key.
-  lxc launch --vm ubuntu:jammy test1 -d root,size=32GB
+  lxc launch --vm ubuntu:noble test1 -d root,size=32GB
   sleep 1m # wait for lxd vm to be ready.
   addr=$(lxc ls test1 --format json | jq -r '.[0].state.network.enp6s0.addresses[0].address')   
 
@@ -134,7 +134,8 @@ function setup_network_spaces_env() {
   echo "Address picked: $addr\n"
 
   # import machine to juju
-  yes "Yes" | juju add-machine "ssh:root@$addr" --private-key=./tests/scripts/assets/keys --public-key=./tests/scripts/assets/keys.pub 
+  yes "yes" | juju add-machine ssh:"root@$addr" --private-key=./tests/scripts/assets/keys --public-key=./tests/scripts/assets/keys.pub || true
+  sleep 30s
   juju deploy ./tests/scripts/assets/juju-spaces-bundle.yaml
 
   #sanity check
