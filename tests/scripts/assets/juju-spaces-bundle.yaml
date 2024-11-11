@@ -4,12 +4,14 @@ applications:
     charm: ./microceph.charm
     num_units: 1
     to:
-    - "0"
+      - "0"
     options:
       snap-channel: squid/edge
-    storage:
-      osd-standalone: loop,3,2G
+      default-pool-size: 1
     bindings:
       "": alpha
       cluster: cluster
       public: alpha
+machines:
+  "0":
+    constraints: arch=amd64 virt-type=virtual-machine root-disk=32G

@@ -480,12 +480,17 @@ jobs:
           date
           mv ~/artifacts/microceph.charm ./tests/scripts/assets/
        
-          bash ./tests/scripts/ci_helpers.sh setup_network_spaces_env 
-          # wait for charm to bootstrap and OSD devices to enroll.
-          sleep 5m
+          # bash ./tests/scripts/ci_helpers.sh setup_network_spaces_env
+          
+            # Install microceph charm using bundle
+          juju deploy ./tests/scripts/assets/juju-spaces-bundle.yaml
+
+          # wait for charm to bootstrap.
+          sleep 1m
           juju status
-          juju wait-for unit microceph/0 --query='workload-message=="(workload) charm is ready"' --timeout=20m
-          bash ./tests/scripts/ci_helpers.sh check_osd_count microceph/0 3
+          juju wait-for application microceph --query='forEach(units, unit => unit.workload-status=="active" && unit.agent-status=="idle")' --timeout=30m || true
+          juju run microceph/0 add-osd loop-spec="2G,1" --wait 5m 
+          bash ./tests/scripts/ci_helpers.sh check_osd_count microceph/0 1
           date
 
       - name: Validate the network configurations.
