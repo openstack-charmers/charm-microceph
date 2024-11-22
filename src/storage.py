@@ -85,14 +85,20 @@ class StorageHandler(Object):
 
         self._clean_stale_osd_data()
 
-        enroll = []
-        for storage in self._fetch_filtered_storages([self.standalone]):
-            if not self._get_osd_id(name=storage):
-                enroll.append(storage)
+        storage_name = event.storage.full_id
+        # If OSD already exists for given juju storage id.
+        if self._get_osd_id(storage_name):
+            logger.debug(
+                f"Storage {storage_name} already enrolled as OSD{self._get_osd_id(storage_name)}"
+            )
+            return
+
+        disk_path = self.juju_storage_get(storage_id=storage_name, attribute="location")
+        logger.debug(f"Enrolling {storage_name} at {disk_path} as OSD.")
 
         with sunbeam_guard.guard(self.charm, self.name):
             self.charm.status.set(MaintenanceStatus("Enrolling OSDs"))
-            self._enroll_disks_in_batch(enroll)
+            self._enroll_disks_in_batch([disk_path])
             self.charm.status.set(ActiveStatus("charm is ready"))
 
     def _on_storage_detaching(self, event: StorageDetachingEvent):
@@ -254,6 +260,7 @@ class StorageHandler(Object):
 
         for k, v in dict(self._stored.osd_data).items():
             # if value is not None.
+            logger.debug(f"OSD {k} INFO: {v}")
             if v and v[directive] == name:
                 return k  # key is the stored osd number.
         return None
