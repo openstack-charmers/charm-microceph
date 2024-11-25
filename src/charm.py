@@ -37,6 +37,7 @@ from ops.main import main
 import ceph
 import cluster
 import microceph
+import microceph_client
 from ceph_broker import get_named_key
 from microceph_client import ClusterServiceUnavailableException
 from radosgw import RadosGWHandler
@@ -388,7 +389,8 @@ class MicroCephCharm(sunbeam_charm.OSBaseOperatorCharm):
     def get_ceph_info_from_configs(self, service_name, caps=None) -> dict:
         """Update ceph info from configuration."""
         # public address should be updated once config public-network is supported
-        public_addrs = microceph.get_mon_public_addresses()
+        client = microceph_client.Client.from_socket()
+        public_addrs = client.cluster.get_mon_addresses()
         return {
             "auth": "cephx",
             "ceph-public-address": self._lookup_system_interfaces(public_addrs),

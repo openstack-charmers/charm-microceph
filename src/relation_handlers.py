@@ -28,6 +28,7 @@ from ops.framework import EventBase, EventSource, Handle, Object, ObjectEvents, 
 from ops_sunbeam.interfaces import OperatorPeers
 from ops_sunbeam.relation_handlers import BasePeerHandler, RelationHandler
 
+import microceph_client
 from ceph import get_osd_count
 from ceph_broker import Capabilities
 from ceph_broker import is_leader as is_ceph_mon_leader
@@ -418,6 +419,9 @@ class CephClientProvides(Object):
         self.framework.observe(
             charm.on[self.relation_name].relation_changed, self._on_relation_changed
         )
+        # React to ceph peers relation events
+        self.framework.observe(charm.on["peers"].relation_changed, self._on_ceph_peers)
+        self.framework.observe(charm.on["peers"].relation_departed, self._on_ceph_peers)
 
     def _on_relation_changed(self, event):
         """Prepare relation for data from requiring side."""
@@ -567,6 +571,17 @@ class CephClientProvides(Object):
         for k, v in data.items():
             relation.data[self.this_unit][k] = str(v)
 
+    def _on_ceph_peers(self, _event):
+        """Handle ceph peers relation events."""
+        # Mon addrs might have changed, update the relation data
+        if not self.model.unit.is_leader():
+            return
+        mon_key = "ceph-mon-public-addresses"
+        client = microceph_client.Client.from_socket()
+        addrs = client.cluster.get_mon_addresses()
+        for relation in self.framework.model.relations[self.relation_name]:
+            relation.data[self.model.app][mon_key] = json.dumps(addrs)
+
 
 class CephClientProviderHandler(RelationHandler):
     """Handler for ceph client relation."""
@@ -638,6 +653,11 @@ class CephClientProviderHandler(RelationHandler):
             data,
         )
         # Ignore the callback function??
+
+    def notify_all(self):
+        """Notify clients of a change."""
+        for relation in self.charm.framework.model.relations[self.relation_name]:
+            relation.data[self.charm.framework.model.unit].clear()
 
 
 class CephRadosGWProviderHandler(CephClientProviderHandler):

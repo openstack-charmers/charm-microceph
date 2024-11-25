@@ -205,6 +205,17 @@ jobs:
             exit 1
           fi
 
+      - name: Test mon addresses
+        run: |
+          curl="curl -s --unix-socket /var/snap/microceph/common/state/control.socket"
+          mons=$( ( $curl http://localhost/1.0/services/mon | \
+            jq -r '.metadata.addresses[]' | wc -l ) )
+          if [[ $mons -ne 2 ]] ; then
+            echo "Expected 2 MONs, got $mons. MON status: "
+            $curl http://localhost/1.0/services/mon
+            exit 1
+          fi
+
       - name: Collect logs
         if: failure()
         run: ./tests/scripts/ci_helpers.sh collect_microceph_logs

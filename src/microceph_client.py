@@ -202,3 +202,8 @@ class ClusterService(BaseService):
         """Delete configuration in database if exists."""
         data = {"key": key, "wait": True}
         self._delete("/1.0/configs", data=json.dumps(data))
+
+    def get_mon_addresses(self) -> List[str]:
+        """Get mon addresses."""
+        mon_status = self._get("/1.0/services/mon").get("metadata")
+        return mon_status.get("addresses", [])
