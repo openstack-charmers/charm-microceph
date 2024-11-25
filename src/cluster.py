@@ -51,6 +51,7 @@ class ClusterNodes(ops.framework.Object):
         )
         if not hostnames:
             event.defer()
+            return
 
         cmd = ["microceph", "cluster", "add", hostnames[0]]
         try:
@@ -167,8 +168,8 @@ class ClusterUpgrades(ops.framework.Object):
         mc_snap.ensure(snap.SnapState.Present, channel=channel)
 
         @tenacity.retry(
-            wait=tenacity.wait_fixed(5),
-            stop=tenacity.stop_after_delay(600),
+            wait=tenacity.wait_fixed(10),
+            stop=tenacity.stop_after_delay(1200),
             retry=tenacity.retry_if_result(lambda b: not b),
         )
         def poll_ok():
