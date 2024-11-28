@@ -2,6 +2,8 @@
 
 Please include a summary of the changes and the related issue. Please also include relevant motivation and context. List any dependencies that are required for this change.
 
+> **_NOTE_** Modifications to charmcraft files like `config.yaml`, `actions.yaml` and `metadata.yaml` may include documentation changes that appear directly on the charmhub listing. Therefore, the type of change field should include `documentation update` if your PR contains such changes.
+
 Fixes # (issue)
 
 ## Type of change
@@ -12,7 +14,7 @@ Please delete options that are not relevant.
 - [ ] New feature (non-breaking change which adds functionality)
 - [ ] Breaking change (fix or feature that would cause existing functionality to not work as expected)
 - [ ] CleanCode (Code refactor, test updates, does not introduce functional changes)
-- [ ] Documentation update (Doc only change)
+- [ ] Documentation update (contains documentation changes)
 
 ## How Has This Been Tested?
 
