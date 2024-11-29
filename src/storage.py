@@ -18,6 +18,7 @@
 
 import json
 import logging
+from socket import gethostname
 from subprocess import CalledProcessError, TimeoutExpired, run
 
 import ops_sunbeam.guard as sunbeam_guard
@@ -37,8 +38,8 @@ class StorageHandler(Object):
     Observes the following events:
     1) *_storage_attached
     2) *_storage_detaching
-    3).add_osd_action
-    4).list_disks_action
+    3) add_osd_action
+    4) list_disks_action
     """
 
     name = "storage"
@@ -49,7 +50,6 @@ class StorageHandler(Object):
     charm = None
     # _stored: per unit stored state for storage class. Contains:
     #  osd_data: dict of dicts with int (osd num) key
-    #    disk_by_id: OSD disk by id (unique)
     #    disk: OSD disk storage name (unique)
     _stored = StoredState()
 
@@ -86,10 +86,15 @@ class StorageHandler(Object):
         self._clean_stale_osd_data()
 
         enroll = []
+
+        logger.debug(f"storage on unit: {self._fetch_filtered_storages([self.standalone])}")
+
         for storage in self._fetch_filtered_storages([self.standalone]):
+            logger.debug(f"Processing {storage}")
             if not self._get_osd_id(name=storage):
                 enroll.append(storage)
 
+        logger.debug(f"Enroll list {enroll}")
         with sunbeam_guard.guard(self.charm, self.name):
             self.charm.status.set(MaintenanceStatus("Enrolling OSDs"))
             self._enroll_disks_in_batch(enroll)
@@ -99,8 +104,10 @@ class StorageHandler(Object):
         """Unified storage detaching handler."""
         # check if the detaching device (of the form directive/index)
         # is being used as or with an OSD.
+        logger.debug(f"Detach event received for : {event.storage.full_id}")
         osd_num = self._get_osd_id(event.storage.full_id)
 
+        logger.debug(f"OSD ID for: {event.storage.full_id} is {osd_num}")
         if osd_num is None:
             return
 
@@ -203,6 +210,7 @@ class StorageHandler(Object):
         disk_paths = map(
             lambda name: self.juju_storage_get(storage_id=name, attribute="location"), disks
         )
+        logger.debug(f"Disk paths {disk_paths}")
         microceph.enroll_disks_as_osds(disk_paths)
 
         # Save OSD data using storage names.
@@ -223,6 +231,7 @@ class StorageHandler(Object):
 
     def _save_osd_data(self, disk_name: str, db_name: str = None):
         """Save OSD data using juju storage names."""
+        logger.debug(f"Entry stored state: {dict(self._stored.osd_data)}")
         disk_path = self.juju_storage_get(storage_id=disk_name, attribute="location")
 
         for osd in microceph.list_disk_cmd()["ConfiguredDisks"]:
@@ -233,13 +242,14 @@ class StorageHandler(Object):
             if not local_device:
                 continue
 
-            # e.g. check 'vdd' in '/dev/vdd'
-            if local_device["name"] in disk_path:
+            # e.g. check 'vdd' in '/dev/vdd' and is for a local device
+            if local_device["name"] in disk_path and osd["location"] in gethostname():
                 logger.debug(f"Added OSD {osd['osd']} with Disk {disk_name}.")
                 self._stored.osd_data[osd["osd"]] = {
-                    "disk_by_id": osd["path"],  # /dev/disk-by-id/ for OSD device.
                     "disk": disk_name,  # storage name for OSD device.
                 }
+
+        logger.debug(f"Exit stored state: {dict(self._stored.osd_data)}")
 
     def _get_osd_id(self, name: str):
         """Fetch the OSD number of consuming OSD, None is not used as OSD."""
