@@ -244,7 +244,7 @@ class StorageHandler(Object):
             local_device = microceph._get_disk_info(osd["path"])
 
             # e.g. check 'vdd' in '/dev/vdd' and is for a local device
-            if local_device["name"] in disk_path: 
+            if local_device["name"] in disk_path:
                 logger.debug(f"Added OSD {osd['osd']} with Disk {disk_name}.")
                 self._stored.osd_data[osd["osd"]] = {
                     "disk": disk_name,  # storage name for OSD device.
