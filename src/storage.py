@@ -233,17 +233,18 @@ class StorageHandler(Object):
         """Save OSD data using juju storage names."""
         logger.debug(f"Entry stored state: {dict(self._stored.osd_data)}")
         disk_path = self.juju_storage_get(storage_id=disk_name, attribute="location")
+        hostname = gethostname()
 
         for osd in microceph.list_disk_cmd()["ConfiguredDisks"]:
+            # OSD not configured on current unit.
+            if osd["location"] not in hostname:
+                continue
+
             # get block device info using /dev/disk-by-id and lsblk.
             local_device = microceph._get_disk_info(osd["path"])
 
-            # OSD not configured on current unit.
-            if not local_device:
-                continue
-
             # e.g. check 'vdd' in '/dev/vdd' and is for a local device
-            if local_device["name"] in disk_path and osd["location"] in gethostname():
+            if local_device["name"] in disk_path: 
                 logger.debug(f"Added OSD {osd['osd']} with Disk {disk_name}.")
                 self._stored.osd_data[osd["osd"]] = {
                     "disk": disk_name,  # storage name for OSD device.
