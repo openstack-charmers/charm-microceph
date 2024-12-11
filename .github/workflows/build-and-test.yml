@@ -593,3 +593,107 @@ jobs:
         if: ${{ failure() && runner.debug }}
         uses: canonical/action-tmate@main
 
+  juju-storage-cluster-test:
+    needs:
+      - lint
+      - unit-test
+      - build
+    name: Juju multi node storage test 
+    runs-on: [self-hosted, xlarge]
+    steps:
+      - name: Download charm
+        uses: actions/download-artifact@v3
+        with:
+          name: charms
+          path: ~/artifacts/
+
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Setup LXD
+        uses: canonical/setup-lxd@v0.1.1
+        with:
+          # pin lxd to LTS release.
+          channel: 5.21/stable
+
+      - name: Install dependencies
+        run: ./tests/scripts/ci_helpers.sh install_deps
+
+      - name: Install MicroCeph charm
+        run: |
+          date
+          mv ~/artifacts/microceph.charm ./microceph.charm
+          juju deploy ./tests/bundles/multi_node_juju_storage.yaml 
+          # wait for charm to bootstrap and OSD devices to enroll.
+          ./tests/scripts/ci_helpers.sh wait_for_microceph_bootstrap
+          date
+
+      - name: Show Juju status
+        run: |
+          set -eux
+          juju status
+
+      - name: Remove Unit microceph/2
+        run: |
+          set -x
+          disk_list=$(juju ssh microceph/leader -- "sudo microceph disk list --json")
+          osd_count=$(echo $disk_list | jq '.ConfiguredDisks.[].location' | grep -c "\-2")
+          if [[ $osd_count -ne 3 ]] ; then
+            echo "Unexpected OSD count on node microceph/2 $osd_count"
+            exit 1
+          fi
+
+          juju remove-unit microceph/2 --no-prompt
+          # wait and check if the unit is still present.
+          for i in $(seq 1 40); do
+            res=$( ( juju status | grep -cF "microceph/2" ) || true )
+            if [[ $res -gt 0 ]] ; then
+              echo -n '.'
+              sleep 5
+            else
+              echo "Unit removed successfully"
+              break
+            fi
+          done
+          # fail if unit still present.
+          if [[ $res -gt 0 ]] ; then
+            echo "Unit still present"
+            juju status
+            exit 1
+          fi
+
+          new_osd_count=$(echo $disk_list | jq '.ConfiguredDisks.[].location' | grep -c "\-2")
+          if [[ $osd_count -gt 0 ]] ; then
+            echo "Unexpected OSD count on node microceph/2 $osd_count"
+            exit 1
+          fi
+      
+      - name: Add another unit
+        run: |
+          juju add-unit microceph -n 1
+          sleep 60s
+          juju wait-for unit microceph/3 --query='workload-message=="(workload) charm is ready"' --timeout=20m
+          total_osd_count=$(echo $disk_list | jq '.ConfiguredDisks.[].location' | grep -c "juju")
+          if [[ $osd_count -gt 9 ]] ; then
+            echo "Unexpected total OSD count on $osd_count"
+            exit 1
+          fi
+
+      - name: Collect logs
+        if: failure()
+        run: ./tests/scripts/ci_helpers.sh collect_microceph_logs
+
+      - name: Upload logs
+        if: failure()
+        uses: actions/upload-artifact@v3
+        with:
+          name: microceph_juju_cluster_test_logs
+          path: logs
+          retention-days: 30
+
+      - name: Setup tmate session
+        if: ${{ failure() && runner.debug }}
+        uses: canonical/action-tmate@main
+
