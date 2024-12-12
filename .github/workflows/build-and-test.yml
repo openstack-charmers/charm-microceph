@@ -664,20 +664,25 @@ jobs:
             exit 1
           fi
 
-          new_osd_count=$(echo $disk_list | jq '.ConfiguredDisks[].location' | grep -c "\-2")
-          if [[ $osd_count -gt 0 ]] ; then
+          # sleep for some time
+          sleep 1m
+
+          disk_list=$(juju ssh microceph/leader -- "sudo microceph disk list --json")
+          new_osd_count=$(echo $disk_list | jq '.ConfiguredDisks[].location' | grep -c "\-2" || true)
+          if [[ $new_osd_count -gt 0 ]] ; then
             echo "Unexpected OSD count on node microceph/2 $osd_count"
             exit 1
           fi
       
       - name: Add another unit
         run: |
+          set -x
           juju add-unit microceph -n 1
           sleep 60s
           juju wait-for unit microceph/3 --query='workload-message=="(workload) charm is ready"' --timeout=20m
           disk_list=$(juju ssh microceph/1 -- "sudo microceph disk list --json")
           total_osd_count=$(echo $disk_list | jq '.ConfiguredDisks[].location' | grep -c "juju")
-          if [[ $osd_count -gt 9 ]] ; then
+          if [[ $total_osd_count -ne 9 ]] ; then
             echo "Unexpected total OSD count on $osd_count"
             exit 1
           fi
