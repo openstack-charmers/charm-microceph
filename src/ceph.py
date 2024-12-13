@@ -766,15 +766,6 @@ class ReplicatedPool(BasePool):
             self.profile_name = profile_name
 
     def _create(self):
-        # Do extra validation on pg_num with data from live cluster
-        if self.pg_num:
-            # Since the number of placement groups were specified, ensure
-            # that there aren't too many created.
-            max_pgs = self.get_pgs(self.replicas, 100.0)
-            self.pg_num = min(self.pg_num, max_pgs)
-        else:
-            self.pg_num = self.get_pgs(self.replicas, self.percent_data)
-
         cmd = [
             "ceph",
             "--id",
@@ -782,10 +773,24 @@ class ReplicatedPool(BasePool):
             "osd",
             "pool",
             "create",
-            "--pg-num-min={}".format(min(AUTOSCALER_DEFAULT_PGS, self.pg_num)),
             self.name,
-            str(self.pg_num),
         ]
+        
+        # If the requested weight is more than 10%, use bulk flag.
+        if self.percent_data > DEFAULT_POOL_WEIGHT:
+            cmd.append("--bulk")
+        # Otherwise use the provided pg_num as the starting value for the pool. 
+        elif self.pg_num:
+            # Sanity check for PG count using the weightage.
+            max_pgs = self.get_pgs(self.replicas, self.percent_data)
+            self.pg_num = min(self.pg_num, max_pgs)
+            log("Optimum PG num {} based on {} replicas and {}% weightage."
+                .format(self.pg_num, self.replicas, self.percent_data))
+
+            # Append the PG count to pool create command. 
+            str(self.pg_num),
+            cmd.append("--pg-num-min={}".format(min(AUTOSCALER_DEFAULT_PGS, self.pg_num))) 
+        
         if self.profile_name:
             cmd.append(self.profile_name)
         check_call(cmd)
