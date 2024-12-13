@@ -432,14 +432,6 @@ class BasePool(object):
         Do not add calls for a specific pool type here, those should go into
         one of the pool specific classes.
         """
-        # Ensure we set the expected pool ratio
-        update_pool(
-            client=self.service,
-            pool=self.name,
-            settings={
-                "target_size_ratio": str(self.percent_data / 100.0),
-            },
-        )
         try:
             set_app_name_for_pool(client=self.service, pool=self.name, name=self.app_name)
         except CalledProcessError:
