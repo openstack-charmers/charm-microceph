@@ -51,6 +51,7 @@ class ClusterNodes(ops.framework.Object):
         )
         if not hostnames:
             event.defer()
+            return
 
         cmd = ["microceph", "cluster", "add", hostnames[0]]
         try:
