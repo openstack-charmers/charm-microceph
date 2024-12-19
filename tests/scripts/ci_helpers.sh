@@ -40,6 +40,43 @@ function setup_juju_spaces() {
     juju move-to-space cluster 10.85.4.0/24
 }
 
+function ensure_osd_count_on_host() {
+  set -ex
+  local location="${1?missing}"
+  local count="${2?missing}"
+
+  disk_list=$(juju ssh microceph/leader -- "sudo microceph disk list --json")
+  osd_count=$(echo $disk_list | jq '.ConfiguredDisks[].location' | grep -c $location)
+  if [[ $osd_count -ne $count ]] ; then
+    echo "Unexpected OSD count on node microceph/2 $osd_count"
+    exit 1
+  fi
+}
+
+function remove_unit_wait() {
+  set -ex
+  local unit_name="${1?missing}"
+
+  juju remove-unit $unit_name --no-prompt
+  # wait and check if the unit is still present.
+  for i in $(seq 1 40); do
+    res=$( ( juju status | grep -cF "microceph/2" ) || true )
+    if [[ $res -gt 0 ]] ; then
+      echo -n '.'
+      sleep 5
+    else
+      echo "Unit removed successfully"
+      break
+    fi
+  done
+  # fail if unit still present.
+  if [[ $res -gt 0 ]] ; then
+    echo "Unit still present"
+    juju status
+    exit 1
+  fi
+}
+
 function verify_juju_spaces_config() {
     set -ex
     date

@@ -186,24 +186,7 @@ jobs:
       - name: Remove Unit
         run: |
           set -x
-          juju remove-unit microceph/2 --no-prompt
-          # wait and check if the unit is still present.
-          for i in $(seq 1 40); do
-            res=$( ( juju status | grep -cF "microceph/2" ) || true )
-            if [[ $res -gt 0 ]] ; then
-              echo -n '.'
-              sleep 5
-            else
-              echo "Unit removed successfully"
-              break
-            fi
-          done
-          # fail if unit still present.
-          if [[ $res -gt 0 ]] ; then
-            echo "Unit still present"
-            juju status
-            exit 1
-          fi
+          ./tests/scripts/ci_helpers.sh remove_unit_wait "microceph/2"
 
       - name: Test mon addresses
         run: |
@@ -638,42 +621,14 @@ jobs:
       - name: Remove Unit microceph/2
         run: |
           set -x
-          disk_list=$(juju ssh microceph/leader -- "sudo microceph disk list --json")
-          osd_count=$(echo $disk_list | jq '.ConfiguredDisks[].location' | grep -c "\-2")
-          if [[ $osd_count -ne 3 ]] ; then
-            echo "Unexpected OSD count on node microceph/2 $osd_count"
-            exit 1
-          fi
-
-          juju remove-unit microceph/2 --no-prompt
-          # wait and check if the unit is still present.
-          for i in $(seq 1 40); do
-            res=$( ( juju status | grep -cF "microceph/2" ) || true )
-            if [[ $res -gt 0 ]] ; then
-              echo -n '.'
-              sleep 5
-            else
-              echo "Unit removed successfully"
-              break
-            fi
-          done
-          # fail if unit still present.
-          if [[ $res -gt 0 ]] ; then
-            echo "Unit still present"
-            juju status
-            exit 1
-          fi
+          ./tests/scripts/ci_helpers.sh ensure_osd_count_on_host "juju.*\-2" 3
+          ./tests/scripts/ci_helpers.sh remove_unit_wait "microceph/2"
 
           # sleep for some time
           sleep 1m
 
-          disk_list=$(juju ssh microceph/leader -- "sudo microceph disk list --json")
-          new_osd_count=$(echo $disk_list | jq '.ConfiguredDisks[].location' | grep -c "\-2" || true)
-          if [[ $new_osd_count -gt 0 ]] ; then
-            echo "Unexpected OSD count on node microceph/2 $osd_count"
-            exit 1
-          fi
-      
+          ./tests/scripts/ci_helpers.sh ensure_osd_count_on_host "juju.*\-2" 0
+
       - name: Add another unit
         run: |
           set -x
@@ -695,7 +650,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v3
         with:
-          name: microceph_juju_cluster_test_logs
+          name: microceph_juju_storage_cluster_test_logs
           path: logs
           retention-days: 30
 
