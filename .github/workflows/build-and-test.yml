@@ -635,12 +635,9 @@ jobs:
           juju add-unit microceph -n 1
           sleep 60s
           juju wait-for unit microceph/3 --query='workload-message=="(workload) charm is ready"' --timeout=20m
-          disk_list=$(juju ssh microceph/1 -- "sudo microceph disk list --json")
-          total_osd_count=$(echo $disk_list | jq '.ConfiguredDisks[].location' | grep -c "juju")
-          if [[ $total_osd_count -ne 9 ]] ; then
-            echo "Unexpected total OSD count on $osd_count"
-            exit 1
-          fi
+          
+           # "juju" substring is a part of all hosts, so it will fetch total OSD count 
+          ./tests/scripts/ci_helpers.sh ensure_osd_count_on_host "juju" 9
 
       - name: Collect logs
         if: failure()
