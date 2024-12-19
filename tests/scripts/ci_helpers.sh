@@ -46,7 +46,7 @@ function ensure_osd_count_on_host() {
   local count="${2?missing}"
 
   disk_list=$(juju ssh microceph/leader -- "sudo microceph disk list --json")
-  osd_count=$(echo $disk_list | jq '.ConfiguredDisks[].location' | grep -c $location)
+  osd_count=$(echo $disk_list | jq '.ConfiguredDisks[].location' | grep -c $location || true)
   if [[ $osd_count -ne $count ]] ; then
     echo "Unexpected OSD count on node microceph/2 $osd_count"
     exit 1
