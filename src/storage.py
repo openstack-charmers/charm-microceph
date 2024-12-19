@@ -229,8 +229,8 @@ class StorageHandler(Object):
                 self._clean_stale_osd_data()
             raise e
 
-    def _save_osd_data(self, disk_name: str, db_name: str = None):
-        """Save OSD data using juju storage names."""
+    def _save_osd_data(self, disk_name: str):
+        """Save OSD data to stored state mapping with juju storage names."""
         logger.debug(f"Entry stored state: {dict(self._stored.osd_data)}")
         disk_path = self.juju_storage_get(storage_id=disk_name, attribute="location")
         hostname = gethostname()
