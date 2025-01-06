@@ -35,3 +35,33 @@ set-pool-size:
 get-rgw-endpoints:
   description: |
     S3 and swift public endpoints for Rados Gateway.
+enter-maintenance:
+  description: |
+    Put the given unit into maintenance mode.
+  params:
+    dry-run:
+      type: boolean
+      description: |
+        Do not run the steps but print the action plan.
+    force:
+      type: boolean
+      description: |
+        Force to enter maintenance mode even if the sanity checks fail.
+    set-noout:
+      type: boolean
+      default: true
+      description: |
+        Optional to run `ceph osd set noout`. Defaults to set noout when entering maintenance mode.
+    stop-osds:
+      type: boolean
+      default: false
+      description: |
+        Optional to stop and disable OSD service on that node. Defaults to keep the OSD service running when entering maintenance mode.
+exit-maintenance:
+  description: |
+     Bring the given unit out of maintenance mode.
+  params:
+    dry-run:
+      type: boolean
+      description: |
+        Do not run the steps but print the action plan.

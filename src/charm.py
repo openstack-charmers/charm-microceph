@@ -79,6 +79,8 @@ class MicroCephCharm(sunbeam_charm.OSBaseOperatorCharm):
         self.framework.observe(self.on.install, self._on_install)
         self.framework.observe(self.on.stop, self._on_stop)
         self.framework.observe(self.on.set_pool_size_action, self._set_pool_size_action)
+        self.framework.observe(self.on.exit_maintenance_action, self._exit_maintenance_action)
+        self.framework.observe(self.on.enter_maintenance_action, self._enter_maintenance_action)
         self.framework.observe(self.on.peers_relation_created, self._on_peer_relation_created)
         self.framework.observe(self.on["peers"].relation_departed, self._on_peer_relation_departed)
 
@@ -199,6 +201,54 @@ class MicroCephCharm(sunbeam_charm.OSBaseOperatorCharm):
         except subprocess.CalledProcessError:
             logger.warning("Failed to set new pool size")
             event.set_results({"message": "set-pool-size failed"})
+            event.fail()
+
+    def _exit_maintenance_action(self, event: ops.framework.EventBase) -> None:
+        """Bring the given unit out of maintenance mode."""
+        dry_run = event.params.get("dry-run")
+
+        try:
+            client = microceph_client.Client.from_socket()
+            output = client.cluster.exit_maintenance_mode(dry_run=dry_run)
+            error = output.get("error")
+            actions = "\n".join(output.get("metadata", []))
+            if not error:
+                event.set_results({"status": "success", "error": "", "actions": actions})
+            else:
+                logger.warning("Failed to enter maintenance mode for: %s", self.unit.name)
+                event.set_results({"status": "failure", "error": error, "actions": actions})
+                event.fail()
+        except Exception as e:
+            logger.warning("Failed to exit maintenance mode for: %s", self.unit.name)
+            event.set_results({"status": "failure", "error": str(e), "actions": ""})
+            event.fail()
+
+    def _enter_maintenance_action(self, event: ops.framework.EventBase) -> None:
+        """Bring the given unit into maintenance mode."""
+        force = event.params.get("force")
+        dry_run = event.params.get("dry-run")
+        set_noout = event.params.get("set-noout")
+        stop_osds = event.params.get("stop-osds")
+
+        try:
+            client = microceph_client.Client.from_socket()
+            output = client.cluster.enter_maintenance_mode(
+                force=force,
+                dry_run=dry_run,
+                set_noout=set_noout,
+                stop_osds=stop_osds,
+            )
+            error = output.get("error")
+            actions = "\n".join(output.get("metadata", []))
+            if not error:
+                event.set_results({"status": "success", "error": "", "actions": actions})
+            else:
+                logger.warning("Failed to enter maintenance mode for: %s", self.unit.name)
+                event.set_results({"status": "failure", "error": error, "actions": actions})
+                event.fail()
+        except Exception as e:
+            logger.warning("Failed to enter maintenance mode for: %s", self.unit.name)
+            event.set_results({"status": "failure", "error": str(e), "actions": ""})
             event.fail()
 
     @property
