@@ -729,3 +729,102 @@ class TestCharm(test_utils.CharmTestCase):
         }
         action_event.set_results.assert_called_with(expected_endpoints)
         action_event.fail.assert_not_called()
+
+    @patch("charm.microceph_client.Client")
+    def test_enter_maintenance_action_success(self, cclient):
+        cclient.from_socket().cluster.enter_maintenance_mode.return_value = {
+            "error": "",
+            "actions": [],
+        }
+        action_event = MagicMock()
+        action_event.params = {
+            "force": False,
+            "dry-run": False,
+            "set-noout": True,
+            "stop-osds": False,
+        }
+
+        self.harness.charm._enter_maintenance_action(action_event)
+        action_event.set_results.assert_called_with(
+            {"status": "success", "error": "", "actions": ""}
+        )
+        action_event.fail.assert_not_called()
+
+    @patch("charm.microceph_client.Client")
+    def test_enter_maintenance_action_failure(self, cclient):
+        cclient.from_socket().cluster.enter_maintenance_mode.return_value = {
+            "error": "check fails",
+            "actions": [],
+        }
+        action_event = MagicMock()
+        action_event.params = {
+            "force": False,
+            "dry-run": False,
+            "set-noout": True,
+            "stop-osds": False,
+        }
+
+        self.harness.charm._enter_maintenance_action(action_event)
+        action_event.set_results.assert_called_with(
+            {"status": "failure", "error": "check fails", "actions": ""}
+        )
+        action_event.fail.assert_called()
+
+    @patch("charm.microceph_client.Client")
+    def test_enter_maintenance_action_error(self, cclient):
+        cclient.from_socket().cluster.enter_maintenance_mode.side_effect = Exception("some errors")
+        action_event = MagicMock()
+        action_event.params = {
+            "force": False,
+            "dry-run": False,
+            "set-noout": True,
+            "stop-osds": False,
+        }
+
+        self.harness.charm._enter_maintenance_action(action_event)
+        action_event.set_results.assert_called_with(
+            {"status": "failure", "error": "some errors", "actions": ""}
+        )
+        action_event.fail.assert_called()
+
+    @patch("charm.microceph_client.Client")
+    def test_exit_maintenance_action_success(self, cclient):
+        cclient.from_socket().cluster.exit_maintenance_mode.return_value = {
+            "error": "",
+            "actions": [],
+        }
+        action_event = MagicMock()
+        action_event.params = {"dry-run": False}
+
+        self.harness.charm._exit_maintenance_action(action_event)
+        action_event.set_results.assert_called_with(
+            {"status": "success", "error": "", "actions": ""}
+        )
+        action_event.fail.assert_not_called()
+
+    @patch("charm.microceph_client.Client")
+    def test_exit_maintenance_action_failure(self, cclient):
+        cclient.from_socket().cluster.exit_maintenance_mode.return_value = {
+            "error": "check fails",
+            "actions": [],
+        }
+        action_event = MagicMock()
+        action_event.params = {"dry-run": False}
+
+        self.harness.charm._exit_maintenance_action(action_event)
+        action_event.set_results.assert_called_with(
+            {"status": "failure", "error": "check fails", "actions": ""}
+        )
+        action_event.fail.assert_called()
+
+    @patch("charm.microceph_client.Client")
+    def test_exit_maintenance_action_error(self, cclient):
+        cclient.from_socket().cluster.exit_maintenance_mode.side_effect = Exception("some errors")
+        action_event = MagicMock()
+        action_event.params = {"dry-run": False}
+
+        self.harness.charm._exit_maintenance_action(action_event)
+        action_event.set_results.assert_called_with(
+            {"status": "failure", "error": "some errors", "actions": ""}
+        )
+        action_event.fail.assert_called()
