@@ -18,7 +18,7 @@
 
 import json
 import logging
-from socket import gethostname, getfqdn
+from socket import getfqdn, gethostname
 from subprocess import CalledProcessError, TimeoutExpired, run
 
 import ops_sunbeam.guard as sunbeam_guard
@@ -238,8 +238,8 @@ class StorageHandler(Object):
 
         for osd in microceph.list_disk_cmd()["ConfiguredDisks"]:
             # OSD not configured on current unit.
-            # check for exect match with both hostname and fqdn.
-            if osd["location"] != hostname and osd['location'] != fqdn:
+            # check for exact match with both hostname and fqdn.
+            if osd["location"] != hostname and osd["location"] != fqdn:
                 continue
 
             # get block device info using /dev/disk-by-id and lsblk.
