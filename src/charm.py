@@ -209,7 +209,7 @@ class MicroCephCharm(sunbeam_charm.OSBaseOperatorCharm):
 
         try:
             client = microceph_client.Client.from_socket()
-            output = client.cluster.exit_maintenance_mode(dry_run=dry_run)
+            output = client.cluster.exit_maintenance_mode(dry_run)
             error = output.get("error")
             actions = "\n".join(output.get("metadata", []))
             if not error:
@@ -232,12 +232,7 @@ class MicroCephCharm(sunbeam_charm.OSBaseOperatorCharm):
 
         try:
             client = microceph_client.Client.from_socket()
-            output = client.cluster.enter_maintenance_mode(
-                force=force,
-                dry_run=dry_run,
-                set_noout=set_noout,
-                stop_osds=stop_osds,
-            )
+            output = client.cluster.enter_maintenance_mode(force, dry_run, set_noout, stop_osds)
             error = output.get("error")
             actions = "\n".join(output.get("metadata", []))
             if not error:
