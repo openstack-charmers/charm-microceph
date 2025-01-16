@@ -60,7 +60,7 @@ function remove_unit_wait() {
   juju remove-unit $unit_name --no-prompt
   # wait and check if the unit is still present.
   for i in $(seq 1 40); do
-    res=$( ( juju status | grep -cF "microceph/2" ) || true )
+    res=$( ( juju status | grep -cF "$unit_name" ) || true )
     if [[ $res -gt 0 ]] ; then
       echo -n '.'
       sleep 5

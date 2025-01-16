@@ -215,6 +215,171 @@ jobs:
         if: ${{ failure() && runner.debug }}
         uses: canonical/action-tmate@main
 
+  juju-cluster-maintenance-test:
+    needs:
+      - lint
+      - unit-test
+      - build
+    name: Juju cluster maintenance test
+    runs-on: [self-hosted, xlarge]
+    steps:
+
+      - name: Download charm
+        uses: actions/download-artifact@v3
+        with:
+          name: charms
+          path: ~/artifacts/
+
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Setup LXD
+        uses: canonical/setup-lxd@v0.1.1
+        with:
+          # pin lxd to LTS release.
+          channel: 5.21/stable
+
+      - name: Install dependencies
+        run: ./tests/scripts/ci_helpers.sh install_deps
+
+      - name: Install MicroCeph charm
+        run: |
+          date
+          juju deploy -n 4 ~/artifacts/microceph.charm --config default-pool-size=1
+          ./tests/scripts/ci_helpers.sh wait_for_microceph_bootstrap
+          date
+
+      - name: Show Juju status
+        run: |
+          set -eux
+          juju status
+
+      - name: Enable one extra ceph mon for redundancy
+        run: |
+          set -eux
+          juju ssh microceph/3 -- sudo microceph enable mon
+
+      - name: Add disks
+        run: |
+          set -eux
+          juju run microceph/0 add-osd loop-spec=4G,1 --wait=2m
+          juju run microceph/1 add-osd loop-spec=4G,1 --wait=2m
+          juju run microceph/2 add-osd loop-spec=4G,1 --wait=2m
+          juju run microceph/3 add-osd loop-spec=4G,1 --wait=2m
+
+      - name: Show Ceph status
+        run: |
+          set -eux
+          juju ssh microceph/0 -- sudo microceph status
+          juju ssh microceph/0 -- sudo microceph.ceph -s
+
+      - name: Dry run test
+        run: |
+          set -eux
+
+          has_plan=$(juju run microceph/0 exit-maintenance dry-run=true --format json | jq '."microceph/0".results.actions != ""')
+          if [ "$has_plan" != "true" ] ; then
+            echo "Expect dry run exit-mainteance to produce action plan."
+            exit 1
+          fi
+
+          has_plan=$(juju run microceph/0 enter-maintenance dry-run=true --format json | jq '."microceph/0".results.actions != ""')
+          if [ "$has_plan" != "true" ] ; then
+            echo "Expect dry run enter-maintenance to produce action plan."
+            exit 1
+          fi
+
+      - name: Test enter maintenance mode okay
+        run: |
+          set -eux
+
+          no_plan=$(juju run microceph/3 enter-maintenance stop-osds=true --format json | jq '."microceph/0".results.actions == ""')
+          if [ "$no_plan" != "false" ] ; then
+            echo "Expect enter-maintenance to produce no action plan."
+            exit 1
+          fi
+
+          if ! $(juju ssh microceph/3 -- sudo microceph.ceph osd dump | grep noout > /dev/null 2>&1) ; then
+            echo "Expect osd noout is set"
+            exit 1
+          fi
+
+          if ! $(juju ssh microceph/3 -- snap services microceph.osd | grep inactive > /dev/null 2>&1) ; then
+            echo "Expect osd service is inactive"
+            exit 1
+          fi
+
+          if ! $(juju ssh microceph/3 -- snap services microceph.osd | grep disabled > /dev/null 2>&1) ; then
+            echo "Expect osd service is disabled"
+            exit 1
+          fi
+
+      - name: Test exit maintenance mode okay
+        run: |
+          set -eux
+
+          no_plan=$(juju run microceph/3 exit-maintenance --format json | jq '."microceph/0".results.actions == ""')
+          if [ "$no_plan" != "false" ] ; then
+            echo "Expect exit-maintenance to produce no action plan."
+            exit 1
+          fi
+
+          if $(juju ssh microceph/3 -- sudo microceph.ceph osd dump | grep noout > /dev/null 2>&1) ; then
+            echo "Expect osd noout is unset"
+            exit 1
+          fi
+
+          if ! $(juju ssh microceph/3 -- snap services microceph.osd | grep active > /dev/null 2>&1) ; then
+            echo "Expect osd service is active"
+            exit 1
+          fi
+
+          if ! $(juju ssh microceph/3 -- snap services microceph.osd | grep enabled > /dev/null 2>&1) ; then
+            echo "Expect osd service is enabled"
+            exit 1
+          fi
+
+      - name: Remove Unit
+        run: |
+          set -x
+          ./tests/scripts/ci_helpers.sh remove_unit_wait "microceph/3"
+
+      - name: Test enter maintenance mode fail
+        run: |
+          set -eux
+
+          result=$(juju run microceph/2 enter-maintenance stop-osds=true --format json)
+
+          has_error=$(echo $result | jq '."microceph/2".results.error | contains("failed to enter maintenance mode")')
+          if [ "$has_error" != "true" ] ; then
+            echo "Expect enter-maintenance to fail with error message."
+            exit 1
+          fi
+
+          status_failure=$(echo $result | jq '."microceph/2".results.status == "failure"')
+          if [ "$status_failure" != "true" ] ; then
+            echo "Expect enter-maintenance to fail with status=failure."
+            exit 1
+          fi
+
+      - name: Collect logs
+        if: failure()
+        run: ./tests/scripts/ci_helpers.sh collect_microceph_logs
+
+      - name: Upload logs
+        if: failure()
+        uses: actions/upload-artifact@v3
+        with:
+          name: microceph_juju_cluster_test_logs
+          path: logs
+          retention-days: 30
+
+      - name: Setup tmate session
+        if: ${{ failure() && runner.debug }}
+        uses: canonical/action-tmate@main
+
   juju-single-test:
     needs:
       - lint
@@ -581,7 +746,7 @@ jobs:
       - lint
       - unit-test
       - build
-    name: Juju multi node storage test 
+    name: Juju multi node storage test
     runs-on: [self-hosted, xlarge]
     steps:
       - name: Download charm
@@ -608,7 +773,7 @@ jobs:
         run: |
           date
           mv ~/artifacts/microceph.charm ./microceph.charm
-          juju deploy ./tests/bundles/multi_node_juju_storage.yaml 
+          juju deploy ./tests/bundles/multi_node_juju_storage.yaml
           # wait for charm to bootstrap and OSD devices to enroll.
           ./tests/scripts/ci_helpers.sh wait_for_microceph_bootstrap
           date
@@ -635,8 +800,8 @@ jobs:
           juju add-unit microceph -n 1
           sleep 60s
           juju wait-for unit microceph/3 --query='workload-message=="(workload) charm is ready"' --timeout=20m
-          
-           # "juju" substring is a part of all hosts, so it will fetch total OSD count 
+
+           # "juju" substring is a part of all hosts, so it will fetch total OSD count
           ./tests/scripts/ci_helpers.sh ensure_osd_count_on_host "juju" 9
 
       - name: Collect logs
