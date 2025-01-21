@@ -209,18 +209,39 @@ class MicroCephCharm(sunbeam_charm.OSBaseOperatorCharm):
 
         try:
             client = microceph_client.Client.from_socket()
-            output = client.cluster.exit_maintenance_mode(dry_run)
-            error = output.get("error")
-            actions = "\n".join(output.get("metadata", []) or [])
-            if not error:
-                event.set_results({"status": "success", "error": "", "actions": actions})
-            else:
-                logger.warning("Failed to enter maintenance mode for: %s", self.unit.name)
-                event.set_results({"status": "failure", "error": error, "actions": actions})
+            output = client.cluster.exit_maintenance_mode(gethostname(), dry_run)
+            metadata = output.get("metadata", []) or []
+            errors = []
+            actions = {}
+            for i, result in enumerate(metadata, 1):
+                actions[f"step-{i}"] = {
+                    "description": result["action"],
+                    "error": result["error"],
+                    "id": result["name"],
+                }
+                if result["error"] != "":
+                    errors.append(result["error"])
+
+            event.set_results(
+                {
+                    "actions": actions,
+                    "errors": "\n".join(errors),
+                    "status": "failure" if len(errors) != 0 else "success",
+                }
+            )
+            if len(errors) != 0:
+                flatten_err_msg = " ".join([f"({msg})" for msg in errors])
+                logger.error(
+                    "Failed to exit maintenance mode for unit '%s': [%s]",
+                    self.unit.name,
+                    flatten_err_msg,
+                )
                 event.fail()
         except Exception as e:
-            logger.warning("Failed to exit maintenance mode for: %s", self.unit.name)
-            event.set_results({"status": "failure", "error": str(e), "actions": ""})
+            logger.error(
+                "Failed to exit maintenance mode for unit '%s': [%s]", self.unit.name, str(e)
+            )
+            event.set_results({"actions": {}, "errors": str(e), "status": "failure"})
             event.fail()
 
     def _enter_maintenance_action(self, event: ops.framework.EventBase) -> None:
@@ -232,18 +253,46 @@ class MicroCephCharm(sunbeam_charm.OSBaseOperatorCharm):
 
         try:
             client = microceph_client.Client.from_socket()
-            output = client.cluster.enter_maintenance_mode(force, dry_run, set_noout, stop_osds)
-            error = output.get("error")
-            actions = "\n".join(output.get("metadata", []) or [])
-            if not error:
-                event.set_results({"status": "success", "error": "", "actions": actions})
-            else:
-                logger.warning("Failed to enter maintenance mode for: %s", self.unit.name)
-                event.set_results({"status": "failure", "error": error, "actions": actions})
+            output = client.cluster.enter_maintenance_mode(
+                gethostname(), force, dry_run, set_noout, stop_osds
+            )
+            metadata = output.get("metadata", []) or []
+            errors = []
+            actions = {}
+            for i, result in enumerate(metadata, 1):
+                actions[f"step-{i}"] = {
+                    "description": result["action"],
+                    "error": result["error"],
+                    "id": result["name"],
+                }
+                if result["error"] != "":
+                    errors.append(result["error"])
+
+            event.set_results(
+                {
+                    "actions": actions,
+                    "errors": "\n".join(errors),
+                    "status": "failure" if len(errors) != 0 else "success",
+                }
+            )
+            if force:
+                logger.warning(
+                    "Forced to enter maintenance mode, all actions will be run but errors will be "
+                    "ignored and reported."
+                )
+            if len(errors) != 0:
+                flatten_err_msg = " ".join([f"({msg})" for msg in errors])
+                logger.error(
+                    "Failed to enter maintenance mode for unit '%s': [%s]",
+                    self.unit.name,
+                    flatten_err_msg,
+                )
                 event.fail()
         except Exception as e:
-            logger.warning("Failed to enter maintenance mode for: %s", self.unit.name)
-            event.set_results({"status": "failure", "error": str(e), "actions": ""})
+            logger.error(
+                "Failed to enter maintenance mode for unit '%s': [%s]", self.unit.name, str(e)
+            )
+            event.set_results({"actions": {}, "errors": str(e), "status": "failure"})
             event.fail()
 
     @property
