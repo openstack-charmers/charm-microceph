@@ -272,22 +272,26 @@ class MicroCephCharm(sunbeam_charm.OSBaseOperatorCharm):
                 {
                     "actions": actions,
                     "errors": "\n".join(errors),
-                    "status": "failure" if len(errors) != 0 else "success",
+                    "status": "failure" if len(errors) != 0 and not force else "success",
                 }
             )
-            if force:
-                logger.warning(
-                    "Forced to enter maintenance mode, all actions will be run but errors will be "
-                    "ignored and reported."
-                )
             if len(errors) != 0:
                 flatten_err_msg = " ".join([f"({msg})" for msg in errors])
-                logger.error(
-                    "Failed to enter maintenance mode for unit '%s': [%s]",
-                    self.unit.name,
-                    flatten_err_msg,
-                )
-                event.fail()
+                if force:
+                    logger.warning(
+                        "Forced to enter maintenance mode, all actions were run but "
+                        "errors were ignored. Failed to enter maintenance mode for "
+                        "unit '%s': [%s]",
+                        self.unit.name,
+                        flatten_err_msg,
+                    )
+                else:
+                    logger.error(
+                        "Failed to enter maintenance mode for unit '%s': [%s]",
+                        self.unit.name,
+                        flatten_err_msg,
+                    )
+                    event.fail()
         except Exception as e:
             logger.error(
                 "Failed to enter maintenance mode for unit '%s': [%s]", self.unit.name, str(e)
