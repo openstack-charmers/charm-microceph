@@ -60,6 +60,14 @@ class UnrecognizedClusterConfigOption(RemoteException):
     pass
 
 
+class MaintenanceOperationFailedException(RemoteException):
+    """Raised when any maintenance operation failed."""
+
+    def __init__(self, message: str, response: dict[Any]):
+        super().__init__(message)
+        self.response = response
+
+
 class BaseService(ABC):
     """BaseService is the base service class for microclusterd services."""
 
@@ -111,6 +119,8 @@ class BaseService(ABC):
                 raise UnrecognizedClusterConfigOption("Option not found")
             elif "Error EINVAL: unrecognized config target" in error:
                 raise UnrecognizedClusterConfigOption("Option not found")
+            elif "maintenance operations failed" in error:
+                raise MaintenanceOperationFailedException(error, response.json())
             else:
                 raise e
 
