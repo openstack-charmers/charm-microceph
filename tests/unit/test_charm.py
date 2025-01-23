@@ -23,6 +23,7 @@ from ops.testing import Harness
 
 import charm
 import microceph
+from microceph_client import MaintenanceOperationFailedException
 
 DUMMY_CA_CERT = """-----BEGIN CERTIFICATE-----
 MIIDdzCCAl+gAwIBAgIUexFR59kb53PwxGKCFFO32jHAGKwwDQYJKoZIhvcNAQEL
@@ -778,20 +779,24 @@ class TestCharm(test_utils.CharmTestCase):
 
     @patch("charm.microceph_client.Client")
     def test_enter_maintenance_action_failure(self, cclient):
-        cclient.from_socket().cluster.enter_maintenance_mode.return_value = {
-            "metadata": [
-                {
-                    "name": "A-ops",
-                    "error": "some error",
-                    "action": "description of A-ops",
-                },
-                {
-                    "name": "B-ops",
-                    "error": "some error",
-                    "action": "description of B-ops",
-                },
-            ],
-        }
+        mock_enter = cclient.from_socket().cluster.enter_maintenance_mode
+        mock_enter.side_effect = MaintenanceOperationFailedException(
+            "some errors",
+            {
+                "metadata": [
+                    {
+                        "name": "A-ops",
+                        "error": "some error",
+                        "action": "description of A-ops",
+                    },
+                    {
+                        "name": "B-ops",
+                        "error": "some error",
+                        "action": "description of B-ops",
+                    },
+                ],
+            },
+        )
         action_event = MagicMock()
         action_event.params = {
             "force": False,
@@ -816,7 +821,7 @@ class TestCharm(test_utils.CharmTestCase):
                         "description": "description of B-ops",
                     },
                 },
-                "errors": "some error\nsome error",
+                "errors": "some errors",
                 "status": "failure",
             }
         )
@@ -882,20 +887,24 @@ class TestCharm(test_utils.CharmTestCase):
 
     @patch("charm.microceph_client.Client")
     def test_exit_maintenance_action_failure(self, cclient):
-        cclient.from_socket().cluster.exit_maintenance_mode.return_value = {
-            "metadata": [
-                {
-                    "name": "A-ops",
-                    "error": "some error",
-                    "action": "description of A-ops",
-                },
-                {
-                    "name": "B-ops",
-                    "error": "some error",
-                    "action": "description of B-ops",
-                },
-            ],
-        }
+        mock_exit = cclient.from_socket().cluster.exit_maintenance_mode
+        mock_exit.side_effect = MaintenanceOperationFailedException(
+            "some errors",
+            {
+                "metadata": [
+                    {
+                        "name": "A-ops",
+                        "error": "some error",
+                        "action": "description of A-ops",
+                    },
+                    {
+                        "name": "B-ops",
+                        "error": "some error",
+                        "action": "description of B-ops",
+                    },
+                ],
+            },
+        )
         action_event = MagicMock()
         action_event.params = {"dry-run": False}
 
@@ -914,7 +923,7 @@ class TestCharm(test_utils.CharmTestCase):
                         "description": "description of B-ops",
                     },
                 },
-                "errors": "some error\nsome error",
+                "errors": "some errors",
                 "status": "failure",
             }
         )

@@ -40,7 +40,10 @@ import cluster
 import microceph
 import microceph_client
 from ceph_broker import get_named_key
-from microceph_client import ClusterServiceUnavailableException
+from microceph_client import (
+    ClusterServiceUnavailableException,
+    MaintenanceOperationFailedException,
+)
 from radosgw import RadosGWHandler
 from relation_handlers import (
     CephClientProviderHandler,
@@ -212,7 +215,6 @@ class MicroCephCharm(sunbeam_charm.OSBaseOperatorCharm):
             client = microceph_client.Client.from_socket()
             output = client.cluster.exit_maintenance_mode(gethostname(), dry_run, check_only)
             metadata = output.get("metadata", []) or []
-            errors = []
             actions = {}
             for i, result in enumerate(metadata, 1):
                 actions[f"step-{i}"] = {
@@ -220,27 +222,24 @@ class MicroCephCharm(sunbeam_charm.OSBaseOperatorCharm):
                     "error": result["error"],
                     "id": result["name"],
                 }
-                if result["error"] != "":
-                    errors.append(result["error"])
-
-            event.set_results(
-                {
-                    "actions": actions,
-                    "errors": "\n".join(errors),
-                    "status": "failure" if len(errors) != 0 else "success",
+            event.set_results({"actions": actions, "errors": "", "status": "success"})
+        except MaintenanceOperationFailedException as e:
+            errors = str(e)
+            output = e.response
+            metadata = output.get("metadata", []) or []
+            actions = {}
+            for i, result in enumerate(metadata, 1):
+                actions[f"step-{i}"] = {
+                    "description": result["action"],
+                    "error": result["error"],
+                    "id": result["name"],
                 }
-            )
-            if len(errors) != 0:
-                flatten_err_msg = " ".join([f"({msg})" for msg in errors])
-                logger.error(
-                    "Failed to exit maintenance mode for unit '%s': [%s]",
-                    self.unit.name,
-                    flatten_err_msg,
-                )
-                event.fail()
+            logger.error("%s", errors)
+            event.set_results({"actions": actions, "errors": errors, "status": "failure"})
+            event.fail()
         except Exception as e:
             logger.error(
-                "Failed to exit maintenance mode for unit '%s': [%s]", self.unit.name, str(e)
+                "Failed to exit maintenance mode for unit '%s': %s", self.unit.name, str(e)
             )
             event.set_results({"actions": {}, "errors": str(e), "status": "failure"})
             event.fail()
@@ -259,7 +258,6 @@ class MicroCephCharm(sunbeam_charm.OSBaseOperatorCharm):
                 gethostname(), force, dry_run, set_noout, stop_osds, check_only
             )
             metadata = output.get("metadata", []) or []
-            errors = []
             actions = {}
             for i, result in enumerate(metadata, 1):
                 actions[f"step-{i}"] = {
@@ -267,36 +265,31 @@ class MicroCephCharm(sunbeam_charm.OSBaseOperatorCharm):
                     "error": result["error"],
                     "id": result["name"],
                 }
-                if result["error"] != "":
-                    errors.append(result["error"])
-
-            event.set_results(
-                {
-                    "actions": actions,
-                    "errors": "\n".join(errors),
-                    "status": "failure" if len(errors) != 0 and not force else "success",
+            event.set_results({"actions": actions, "errors": "", "status": "success"})
+            metadata = output.get("metadata", []) or []
+            if force:
+                logger.warning(
+                    "Forced to enter maintenance mode for %s, all actions were run but "
+                    "errors were ignored.",
+                    self.unit.name,
+                )
+        except MaintenanceOperationFailedException as e:
+            errors = str(e)
+            output = e.response
+            metadata = output.get("metadata", []) or []
+            actions = {}
+            for i, result in enumerate(metadata, 1):
+                actions[f"step-{i}"] = {
+                    "description": result["action"],
+                    "error": result["error"],
+                    "id": result["name"],
                 }
-            )
-            if len(errors) != 0:
-                flatten_err_msg = " ".join([f"({msg})" for msg in errors])
-                if force:
-                    logger.warning(
-                        "Forced to enter maintenance mode, all actions were run but "
-                        "errors were ignored. Failed to enter maintenance mode for "
-                        "unit '%s': [%s]",
-                        self.unit.name,
-                        flatten_err_msg,
-                    )
-                else:
-                    logger.error(
-                        "Failed to enter maintenance mode for unit '%s': [%s]",
-                        self.unit.name,
-                        flatten_err_msg,
-                    )
-                    event.fail()
+            logger.error("%s", errors)
+            event.set_results({"actions": actions, "errors": errors, "status": "failure"})
+            event.fail()
         except Exception as e:
             logger.error(
-                "Failed to enter maintenance mode for unit '%s': [%s]", self.unit.name, str(e)
+                "Failed to enter maintenance mode for unit '%s': %s", self.unit.name, str(e)
             )
             event.set_results({"actions": {}, "errors": str(e), "status": "failure"})
             event.fail()
