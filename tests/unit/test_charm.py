@@ -754,6 +754,7 @@ class TestCharm(test_utils.CharmTestCase):
             "set-noout": True,
             "stop-osds": False,
             "check-only": False,
+            "ignore-check": False,
         }
 
         self.harness.charm._enter_maintenance_action(action_event)
@@ -804,6 +805,7 @@ class TestCharm(test_utils.CharmTestCase):
             "set-noout": True,
             "stop-osds": False,
             "check-only": False,
+            "ignore-check": False,
         }
 
         self.harness.charm._enter_maintenance_action(action_event)
@@ -837,11 +839,27 @@ class TestCharm(test_utils.CharmTestCase):
             "set-noout": True,
             "stop-osds": False,
             "check-only": False,
+            "ignore-check": False,
         }
 
         self.harness.charm._enter_maintenance_action(action_event)
         action_event.set_results.assert_called_with(
             {"status": "failure", "errors": "some errors", "actions": {}}
+        )
+        action_event.fail.assert_called()
+
+    @patch("charm.microceph_client.Client")
+    def test_enter_maintenance_action_mutually_exclusive(self, cclient):
+        action_event = MagicMock()
+        action_event.params = {"check-only": True, "ignore-check": True}
+
+        self.harness.charm._enter_maintenance_action(action_event)
+        action_event.set_results.assert_called_with(
+            {
+                "status": "failure",
+                "errors": "check-only and ignore-check cannot be used together",
+                "actions": {},
+            }
         )
         action_event.fail.assert_called()
 
@@ -938,5 +956,20 @@ class TestCharm(test_utils.CharmTestCase):
         self.harness.charm._exit_maintenance_action(action_event)
         action_event.set_results.assert_called_with(
             {"status": "failure", "errors": "some errors", "actions": {}}
+        )
+        action_event.fail.assert_called()
+
+    @patch("charm.microceph_client.Client")
+    def test_exit_maintenance_action_mutually_exclusive(self, cclient):
+        action_event = MagicMock()
+        action_event.params = {"check-only": True, "ignore-check": True}
+
+        self.harness.charm._exit_maintenance_action(action_event)
+        action_event.set_results.assert_called_with(
+            {
+                "status": "failure",
+                "errors": "check-only and ignore-check cannot be used together",
+                "actions": {},
+            }
         )
         action_event.fail.assert_called()

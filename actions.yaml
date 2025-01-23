@@ -64,6 +64,11 @@ enter-maintenance:
       default: false
       description: |
         Only run the checks for entering maintenance mode.
+    ignore-check:
+      type: boolean
+      default: false
+      description: |
+        Ignore preflight check for entering maintenance mode.
 exit-maintenance:
   description: |
      Bring the given unit out of maintenance mode.
@@ -78,3 +83,8 @@ exit-maintenance:
       default: false
       description: |
         Only run the checks for exiting maintenance mode.
+    ignore-check:
+      type: boolean
+      default: false
+      description: |
+        Ignore preflight check for exiting maintenance mode.

@@ -210,10 +210,19 @@ class MicroCephCharm(sunbeam_charm.OSBaseOperatorCharm):
         """Bring the given unit out of maintenance mode."""
         dry_run = event.params.get("dry-run")
         check_only = event.params.get("check-only")
+        ignore_check = event.params.get("ignore-check")
+        if check_only and ignore_check:
+            errors = "check-only and ignore-check cannot be used together"
+            event.set_results({"actions": {}, "errors": errors, "status": "failure"})
+            logger.error(errors)
+            event.fail()
+            return
 
         try:
             client = microceph_client.Client.from_socket()
-            output = client.cluster.exit_maintenance_mode(gethostname(), dry_run, check_only)
+            output = client.cluster.exit_maintenance_mode(
+                gethostname(), dry_run, check_only, ignore_check
+            )
             metadata = output.get("metadata", []) or []
             actions = {}
             for i, result in enumerate(metadata, 1):
@@ -251,11 +260,18 @@ class MicroCephCharm(sunbeam_charm.OSBaseOperatorCharm):
         set_noout = event.params.get("set-noout")
         stop_osds = event.params.get("stop-osds")
         check_only = event.params.get("check-only")
+        ignore_check = event.params.get("ignore-check")
+        if check_only and ignore_check:
+            errors = "check-only and ignore-check cannot be used together"
+            event.set_results({"actions": {}, "errors": errors, "status": "failure"})
+            logger.error(errors)
+            event.fail()
+            return
 
         try:
             client = microceph_client.Client.from_socket()
             output = client.cluster.enter_maintenance_mode(
-                gethostname(), force, dry_run, set_noout, stop_osds, check_only
+                gethostname(), force, dry_run, set_noout, stop_osds, check_only, ignore_check
             )
             metadata = output.get("metadata", []) or []
             actions = {}
