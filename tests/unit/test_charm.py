@@ -747,6 +747,7 @@ class TestCharm(test_utils.CharmTestCase):
             "dry-run": False,
             "set-noout": True,
             "stop-osds": False,
+            "check-only": False,
         }
 
         self.harness.charm._enter_maintenance_action(action_event)
@@ -792,6 +793,7 @@ class TestCharm(test_utils.CharmTestCase):
             "dry-run": False,
             "set-noout": True,
             "stop-osds": False,
+            "check-only": False,
         }
 
         self.harness.charm._enter_maintenance_action(action_event)
@@ -824,6 +826,7 @@ class TestCharm(test_utils.CharmTestCase):
             "dry-run": False,
             "set-noout": True,
             "stop-osds": False,
+            "check-only": False,
         }
 
         self.harness.charm._enter_maintenance_action(action_event)

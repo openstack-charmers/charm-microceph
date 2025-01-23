@@ -206,10 +206,11 @@ class MicroCephCharm(sunbeam_charm.OSBaseOperatorCharm):
     def _exit_maintenance_action(self, event: ops.framework.EventBase) -> None:
         """Bring the given unit out of maintenance mode."""
         dry_run = event.params.get("dry-run")
+        check_only = event.params.get("check-only")
 
         try:
             client = microceph_client.Client.from_socket()
-            output = client.cluster.exit_maintenance_mode(gethostname(), dry_run)
+            output = client.cluster.exit_maintenance_mode(gethostname(), dry_run, check_only)
             metadata = output.get("metadata", []) or []
             errors = []
             actions = {}
@@ -250,11 +251,12 @@ class MicroCephCharm(sunbeam_charm.OSBaseOperatorCharm):
         dry_run = event.params.get("dry-run")
         set_noout = event.params.get("set-noout")
         stop_osds = event.params.get("stop-osds")
+        check_only = event.params.get("check-only")
 
         try:
             client = microceph_client.Client.from_socket()
             output = client.cluster.enter_maintenance_mode(
-                gethostname(), force, dry_run, set_noout, stop_osds
+                gethostname(), force, dry_run, set_noout, stop_osds, check_only
             )
             metadata = output.get("metadata", []) or []
             errors = []
