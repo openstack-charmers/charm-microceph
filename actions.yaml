@@ -41,10 +41,12 @@ enter-maintenance:
   params:
     dry-run:
       type: boolean
+      default: false
       description: |
         Do not run the steps but print the action plan.
     force:
       type: boolean
+      default: false
       description: |
         Force to enter maintenance mode even if the sanity checks fail.
     set-noout:
@@ -57,11 +59,22 @@ enter-maintenance:
       default: false
       description: |
         Optional to stop and disable OSD service on that node. Defaults to keep the OSD service running when entering maintenance mode.
+    check-only:
+      type: boolean
+      default: false
+      description: |
+        Only run the checks for entering maintenance mode.
 exit-maintenance:
   description: |
      Bring the given unit out of maintenance mode.
   params:
     dry-run:
       type: boolean
+      default: false
       description: |
         Do not run the steps but print the action plan.
+    check-only:
+      type: boolean
+      default: false
+      description: |
+        Only run the checks for exiting maintenance mode.
