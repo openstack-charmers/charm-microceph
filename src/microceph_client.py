@@ -218,9 +218,16 @@ class ClusterService(BaseService):
         mon_status = self._get("/1.0/services/mon").get("metadata")
         return mon_status.get("addresses", [])
 
-    def exit_maintenance_mode(self, node: str, dry_run: bool, check_only: bool) -> List[str]:
+    def exit_maintenance_mode(
+        self, node: str, dry_run: bool, check_only: bool, ignore_check: bool
+    ) -> List[str]:
         """Bring the node out of maintenance mode."""
-        data = {"status": "non-maintenance", "dry_run": dry_run, "check_only": check_only}
+        data = {
+            "status": "non-maintenance",
+            "dry_run": dry_run,
+            "check_only": check_only,
+            "ignore_check": ignore_check,
+        }
         return self._put(f"/1.0/ops/maintenance/{node}", data=json.dumps(data))
 
     def enter_maintenance_mode(
@@ -231,6 +238,7 @@ class ClusterService(BaseService):
         set_noout: bool,
         stop_osds: bool,
         check_only: bool,
+        ignore_check: bool,
     ) -> List[str]:
         """Bring the node into maintenance mode."""
         data = {
@@ -240,5 +248,6 @@ class ClusterService(BaseService):
             "set_noout": set_noout,
             "stop_osds": stop_osds,
             "check_only": check_only,
+            "ignore_check": ignore_check,
         }
         return self._put(f"/1.0/ops/maintenance/{node}", data=json.dumps(data))
