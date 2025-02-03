@@ -46,7 +46,7 @@ jobs:
           charmcraft pack -v
           ./rename.sh
       - name: Upload built charm
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: charms
           path: "*.charm"
@@ -61,7 +61,7 @@ jobs:
     steps:
 
       - name: Download charm
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: charms
           path: ~/artifacts/
@@ -125,7 +125,7 @@ jobs:
 
       - name: Upload logs
         if: failure()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: microceph_juju_functional_test_logs
           path: logs
@@ -145,13 +145,13 @@ jobs:
     steps:
 
       - name: Download charm
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: charms
           path: ~/artifacts/
 
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
@@ -205,7 +205,7 @@ jobs:
 
       - name: Upload logs
         if: failure()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: microceph_juju_cluster_test_logs
           path: logs
@@ -225,13 +225,13 @@ jobs:
     steps:
 
       - name: Download charm
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: charms
           path: ~/artifacts/
 
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
@@ -309,13 +309,13 @@ jobs:
     steps:
 
       - name: Download charm
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: charms
           path: ~/artifacts/
 
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
@@ -419,7 +419,7 @@ jobs:
 
       - name: Upload logs
         if: failure()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: microceph_juju_upgrade_test_logs
           path: logs
@@ -439,13 +439,13 @@ jobs:
     steps:
 
       - name: Download charm
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: charms
           path: ~/artifacts/
 
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
@@ -490,7 +490,7 @@ jobs:
 
       - name: Upload logs
         if: failure()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: microceph_juju_network_spaces_test_logs
           path: logs
@@ -512,13 +512,13 @@ jobs:
     steps:
 
       - name: Download charm
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: charms
           path: ~/artifacts/
 
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
@@ -566,7 +566,7 @@ jobs:
 
       - name: Upload logs
         if: failure()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: microceph_juju_mds_test_logs
           path: logs
@@ -585,13 +585,13 @@ jobs:
     runs-on: [self-hosted, xlarge]
     steps:
       - name: Download charm
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: charms
           path: ~/artifacts/
 
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
@@ -645,7 +645,7 @@ jobs:
 
       - name: Upload logs
         if: failure()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: microceph_juju_storage_cluster_test_logs
           path: logs
