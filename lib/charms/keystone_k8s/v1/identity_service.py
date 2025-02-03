@@ -78,12 +78,13 @@ class IdentityServiceClientCharm(CharmBase):
 import json
 import logging
 
+from ops import ModelError
 from ops.framework import (
-    StoredState,
     EventBase,
-    ObjectEvents,
     EventSource,
     Object,
+    ObjectEvents,
+    StoredState,
 )
 from ops.model import (
     Relation,
@@ -100,7 +101,7 @@ LIBAPI = 1
 
 # Increment this PATCH version before using `charmcraft publish-lib` or reset
 # to 0 if you are raising the major API version
-LIBPATCH = 3
+LIBPATCH = 5
 
 
 logger = logging.getLogger(__name__)
@@ -140,8 +141,13 @@ class IdentityServiceRequires(Object):
     on = IdentityServiceServerEvents()
     _stored = StoredState()
 
-    def __init__(self, charm, relation_name: str, service_endpoints: dict,
-                 region: str):
+    def __init__(
+        self,
+        charm,
+        relation_name: str,
+        service_endpoints: list[dict],
+        region: str,
+    ):
         super().__init__(charm, relation_name)
         self.charm = charm
         self.relation_name = relation_name
@@ -168,9 +174,7 @@ class IdentityServiceRequires(Object):
         """IdentityService relation joined."""
         logging.debug("IdentityService on_joined")
         self.on.connected.emit()
-        self.register_services(
-            self.service_endpoints,
-            self.region)
+        self.register_services(self.service_endpoints, self.region)
 
     def _on_identity_service_relation_changed(self, event):
         """IdentityService relation changed."""
@@ -178,7 +182,7 @@ class IdentityServiceRequires(Object):
         try:
             self.service_password
             self.on.ready.emit()
-        except (AttributeError, KeyError):
+        except (AttributeError, KeyError, ModelError):
             pass
 
     def _on_identity_service_relation_broken(self, event):
@@ -199,92 +203,92 @@ class IdentityServiceRequires(Object):
     @property
     def api_version(self) -> str:
         """Return the api_version."""
-        return self.get_remote_app_data('api-version')
+        return self.get_remote_app_data("api-version")
 
     @property
     def auth_host(self) -> str:
         """Return the auth_host."""
-        return self.get_remote_app_data('auth-host')
+        return self.get_remote_app_data("auth-host")
 
     @property
     def auth_port(self) -> str:
         """Return the auth_port."""
-        return self.get_remote_app_data('auth-port')
+        return self.get_remote_app_data("auth-port")
 
     @property
     def auth_protocol(self) -> str:
         """Return the auth_protocol."""
-        return self.get_remote_app_data('auth-protocol')
+        return self.get_remote_app_data("auth-protocol")
 
     @property
     def internal_host(self) -> str:
         """Return the internal_host."""
-        return self.get_remote_app_data('internal-host')
+        return self.get_remote_app_data("internal-host")
 
     @property
     def internal_port(self) -> str:
         """Return the internal_port."""
-        return self.get_remote_app_data('internal-port')
+        return self.get_remote_app_data("internal-port")
 
     @property
     def internal_protocol(self) -> str:
         """Return the internal_protocol."""
-        return self.get_remote_app_data('internal-protocol')
+        return self.get_remote_app_data("internal-protocol")
 
     @property
     def admin_domain_name(self) -> str:
         """Return the admin_domain_name."""
-        return self.get_remote_app_data('admin-domain-name')
+        return self.get_remote_app_data("admin-domain-name")
 
     @property
     def admin_domain_id(self) -> str:
         """Return the admin_domain_id."""
-        return self.get_remote_app_data('admin-domain-id')
+        return self.get_remote_app_data("admin-domain-id")
 
     @property
     def admin_project_name(self) -> str:
         """Return the admin_project_name."""
-        return self.get_remote_app_data('admin-project-name')
+        return self.get_remote_app_data("admin-project-name")
 
     @property
     def admin_project_id(self) -> str:
         """Return the admin_project_id."""
-        return self.get_remote_app_data('admin-project-id')
+        return self.get_remote_app_data("admin-project-id")
 
     @property
     def admin_user_name(self) -> str:
         """Return the admin_user_name."""
-        return self.get_remote_app_data('admin-user-name')
+        return self.get_remote_app_data("admin-user-name")
 
     @property
     def admin_user_id(self) -> str:
         """Return the admin_user_id."""
-        return self.get_remote_app_data('admin-user-id')
+        return self.get_remote_app_data("admin-user-id")
 
     @property
     def service_domain_name(self) -> str:
         """Return the service_domain_name."""
-        return self.get_remote_app_data('service-domain-name')
+        return self.get_remote_app_data("service-domain-name")
 
     @property
     def service_domain_id(self) -> str:
         """Return the service_domain_id."""
-        return self.get_remote_app_data('service-domain-id')
+        return self.get_remote_app_data("service-domain-id")
 
     @property
     def service_host(self) -> str:
         """Return the service_host."""
-        return self.get_remote_app_data('service-host')
+        return self.get_remote_app_data("service-host")
 
     @property
     def service_credentials(self) -> str:
         """Return the service_credentials secret."""
-        return self.get_remote_app_data('service-credentials')
+        return self.get_remote_app_data("service-credentials")
 
     @property
     def service_password(self) -> str:
         """Return the service_password."""
-        credentials_id = self.get_remote_app_data('service-credentials')
+        credentials_id = self.get_remote_app_data("service-credentials")
         if not credentials_id:
             return None
 
@@ -298,27 +302,27 @@ class IdentityServiceRequires(Object):
     @property
     def service_port(self) -> str:
         """Return the service_port."""
-        return self.get_remote_app_data('service-port')
+        return self.get_remote_app_data("service-port")
 
     @property
     def service_protocol(self) -> str:
         """Return the service_protocol."""
-        return self.get_remote_app_data('service-protocol')
+        return self.get_remote_app_data("service-protocol")
 
     @property
     def service_project_name(self) -> str:
         """Return the service_project_name."""
-        return self.get_remote_app_data('service-project-name')
+        return self.get_remote_app_data("service-project-name")
 
     @property
     def service_project_id(self) -> str:
         """Return the service_project_id."""
-        return self.get_remote_app_data('service-project-id')
+        return self.get_remote_app_data("service-project-id")
 
     @property
     def service_user_name(self) -> str:
         """Return the service_user_name."""
-        credentials_id = self.get_remote_app_data('service-credentials')
+        credentials_id = self.get_remote_app_data("service-credentials")
         if not credentials_id:
             return None
 
@@ -332,30 +336,31 @@ class IdentityServiceRequires(Object):
     @property
     def service_user_id(self) -> str:
         """Return the service_user_id."""
-        return self.get_remote_app_data('service-user-id')
+        return self.get_remote_app_data("service-user-id")
 
     @property
     def internal_auth_url(self) -> str:
         """Return the internal_auth_url."""
-        return self.get_remote_app_data('internal-auth-url')
+        return self.get_remote_app_data("internal-auth-url")
 
     @property
     def admin_auth_url(self) -> str:
         """Return the admin_auth_url."""
-        return self.get_remote_app_data('admin-auth-url')
+        return self.get_remote_app_data("admin-auth-url")
 
     @property
     def public_auth_url(self) -> str:
         """Return the public_auth_url."""
-        return self.get_remote_app_data('public-auth-url')
+        return self.get_remote_app_data("public-auth-url")
 
     @property
     def admin_role(self) -> str:
         """Return the admin_role."""
-        return self.get_remote_app_data('admin-role')
+        return self.get_remote_app_data("admin-role")
 
-    def register_services(self, service_endpoints: dict,
-                          region: str) -> None:
+    def register_services(
+        self, service_endpoints: list[dict], region: str
+    ) -> None:
         """Request access to the IdentityService server."""
         if self.model.unit.is_leader():
             logging.debug("Requesting service registration")
@@ -375,8 +380,15 @@ class HasIdentityServiceClientsEvent(EventBase):
 class ReadyIdentityServiceClientsEvent(EventBase):
     """IdentityServiceClients Ready Event."""
 
-    def __init__(self, handle, relation_id, relation_name, service_endpoints,
-                 region, client_app_name):
+    def __init__(
+        self,
+        handle,
+        relation_id,
+        relation_name,
+        service_endpoints,
+        region,
+        client_app_name,
+    ):
         super().__init__(handle)
         self.relation_id = relation_id
         self.relation_name = relation_name
@@ -390,7 +402,8 @@ class ReadyIdentityServiceClientsEvent(EventBase):
             "relation_name": self.relation_name,
             "service_endpoints": self.service_endpoints,
             "client_app_name": self.client_app_name,
-            "region": self.region}
+            "region": self.region,
+        }
 
     def restore(self, snapshot):
         super().restore(snapshot)
@@ -405,7 +418,9 @@ class IdentityServiceClientEvents(ObjectEvents):
     """Events class for `on`"""
 
     has_identity_service_clients = EventSource(HasIdentityServiceClientsEvent)
-    ready_identity_service_clients = EventSource(ReadyIdentityServiceClientsEvent)
+    ready_identity_service_clients = EventSource(
+        ReadyIdentityServiceClientsEvent
+    )
 
 
 class IdentityServiceProvides(Object):
@@ -441,9 +456,7 @@ class IdentityServiceProvides(Object):
     def _on_identity_service_relation_changed(self, event):
         """Handle IdentityService changed."""
         logging.debug("IdentityService on_changed")
-        REQUIRED_KEYS = [
-            'service-endpoints',
-            'region']
+        REQUIRED_KEYS = ["service-endpoints", "region"]
 
         values = [
             event.relation.data[event.relation.app].get(k)
@@ -452,42 +465,47 @@ class IdentityServiceProvides(Object):
         # Validate data on the relation
         if all(values):
             service_eps = json.loads(
-                event.relation.data[event.relation.app]['service-endpoints'])
+                event.relation.data[event.relation.app]["service-endpoints"]
+            )
             self.on.ready_identity_service_clients.emit(
                 event.relation.id,
                 event.relation.name,
                 service_eps,
-                event.relation.data[event.relation.app]['region'],
-                event.relation.app.name)
+                event.relation.data[event.relation.app]["region"],
+                event.relation.app.name,
+            )
 
     def _on_identity_service_relation_broken(self, event):
         """Handle IdentityService broken."""
         logging.debug("IdentityServiceProvides on_departed")
         # TODO clear data on the relation
 
-    def set_identity_service_credentials(self, relation_name: int,
-                                         relation_id: str,
-                                         api_version: str,
-                                         auth_host: str,
-                                         auth_port: str,
-                                         auth_protocol: str,
-                                         internal_host: str,
-                                         internal_port: str,
-                                         internal_protocol: str,
-                                         service_host: str,
-                                         service_port: str,
-                                         service_protocol: str,
-                                         admin_domain: dict,
-                                         admin_project: dict,
-                                         admin_user: dict,
-                                         service_domain: dict,
-                                         service_project: dict,
-                                         service_user: dict,
-                                         internal_auth_url: str,
-                                         admin_auth_url: str,
-                                         public_auth_url: str,
-                                         service_credentials: str,
-                                         admin_role: str):
+    def set_identity_service_credentials(
+        self,
+        relation_name: int,
+        relation_id: str,
+        api_version: str,
+        auth_host: str,
+        auth_port: str,
+        auth_protocol: str,
+        internal_host: str,
+        internal_port: str,
+        internal_protocol: str,
+        service_host: str,
+        service_port: str,
+        service_protocol: str,
+        admin_domain: dict,
+        admin_project: dict,
+        admin_user: dict,
+        service_domain: dict,
+        service_project: dict,
+        service_user: dict,
+        internal_auth_url: str,
+        admin_auth_url: str,
+        public_auth_url: str,
+        service_credentials: str,
+        admin_role: str,
+    ):
         logging.debug("Setting identity_service connection information.")
         _identity_service_rel = None
         for relation in self.framework.model.relations[relation_name]:
