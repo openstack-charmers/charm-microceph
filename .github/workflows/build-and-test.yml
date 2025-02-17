@@ -225,13 +225,13 @@ jobs:
     steps:
 
       - name: Download charm
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: charms
           path: ~/artifacts/
 
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
@@ -378,7 +378,7 @@ jobs:
 
       - name: Upload logs
         if: failure()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: microceph_juju_cluster_test_logs
           path: logs
