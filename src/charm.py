@@ -40,7 +40,10 @@ import cluster
 import microceph
 import microceph_client
 from ceph_broker import get_named_key
-from microceph_client import ClusterServiceUnavailableException
+from microceph_client import (
+    ClusterServiceUnavailableException,
+    MaintenanceOperationFailedException,
+)
 from radosgw import RadosGWHandler
 from relation_handlers import (
     CephClientProviderHandler,
@@ -81,6 +84,8 @@ class MicroCephCharm(sunbeam_charm.OSBaseOperatorCharm):
         self.framework.observe(self.on.set_pool_size_action, self._set_pool_size_action)
         self.framework.observe(self.on.peers_relation_created, self._on_peer_relation_created)
         self.framework.observe(self.on["peers"].relation_departed, self._on_peer_relation_departed)
+        self.framework.observe(self.on.exit_maintenance_action, self._exit_maintenance_action)
+        self.framework.observe(self.on.enter_maintenance_action, self._enter_maintenance_action)
 
     def _on_install(self, event: ops.framework.EventBase) -> None:
         config = self.model.config.get
@@ -199,6 +204,110 @@ class MicroCephCharm(sunbeam_charm.OSBaseOperatorCharm):
         except subprocess.CalledProcessError:
             logger.warning("Failed to set new pool size")
             event.set_results({"message": "set-pool-size failed"})
+            event.fail()
+
+    def _exit_maintenance_action(self, event: ops.framework.EventBase) -> None:
+        """Bring the given unit out of maintenance mode."""
+        dry_run = event.params.get("dry-run")
+        check_only = event.params.get("check-only")
+        ignore_check = event.params.get("ignore-check")
+        if check_only and ignore_check:
+            errors = "check-only and ignore-check cannot be used together"
+            event.set_results({"actions": {}, "errors": errors, "status": "failure"})
+            logger.error(errors)
+            event.fail()
+            return
+
+        try:
+            client = microceph_client.Client.from_socket()
+            output = client.cluster.exit_maintenance_mode(
+                gethostname(), dry_run, check_only, ignore_check
+            )
+            metadata = output.get("metadata", []) or []
+            actions = {}
+            for i, result in enumerate(metadata, 1):
+                actions[f"step-{i}"] = {
+                    "description": result["action"],
+                    "error": result["error"],
+                    "id": result["name"],
+                }
+            event.set_results({"actions": actions, "errors": "", "status": "success"})
+        except MaintenanceOperationFailedException as e:
+            errors = str(e)
+            output = e.response
+            metadata = output.get("metadata", []) or []
+            actions = {}
+            for i, result in enumerate(metadata, 1):
+                actions[f"step-{i}"] = {
+                    "description": result["action"],
+                    "error": result["error"],
+                    "id": result["name"],
+                }
+            logger.error("%s", errors)
+            event.set_results({"actions": actions, "errors": errors, "status": "failure"})
+            event.fail()
+        except Exception as e:
+            logger.error(
+                "Failed to exit maintenance mode for unit '%s': %s", self.unit.name, str(e)
+            )
+            event.set_results({"actions": {}, "errors": str(e), "status": "failure"})
+            event.fail()
+
+    def _enter_maintenance_action(self, event: ops.framework.EventBase) -> None:
+        """Bring the given unit into maintenance mode."""
+        force = event.params.get("force")
+        dry_run = event.params.get("dry-run")
+        set_noout = event.params.get("set-noout")
+        stop_osds = event.params.get("stop-osds")
+        check_only = event.params.get("check-only")
+        ignore_check = event.params.get("ignore-check")
+        if check_only and ignore_check:
+            errors = "check-only and ignore-check cannot be used together"
+            event.set_results({"actions": {}, "errors": errors, "status": "failure"})
+            logger.error(errors)
+            event.fail()
+            return
+
+        try:
+            client = microceph_client.Client.from_socket()
+            output = client.cluster.enter_maintenance_mode(
+                gethostname(), force, dry_run, set_noout, stop_osds, check_only, ignore_check
+            )
+            metadata = output.get("metadata", []) or []
+            actions = {}
+            for i, result in enumerate(metadata, 1):
+                actions[f"step-{i}"] = {
+                    "description": result["action"],
+                    "error": result["error"],
+                    "id": result["name"],
+                }
+            event.set_results({"actions": actions, "errors": "", "status": "success"})
+            metadata = output.get("metadata", []) or []
+            if force:
+                logger.warning(
+                    "Forced to enter maintenance mode for %s, all actions were run but "
+                    "errors were ignored.",
+                    self.unit.name,
+                )
+        except MaintenanceOperationFailedException as e:
+            errors = str(e)
+            output = e.response
+            metadata = output.get("metadata", []) or []
+            actions = {}
+            for i, result in enumerate(metadata, 1):
+                actions[f"step-{i}"] = {
+                    "description": result["action"],
+                    "error": result["error"],
+                    "id": result["name"],
+                }
+            logger.error("%s", errors)
+            event.set_results({"actions": actions, "errors": errors, "status": "failure"})
+            event.fail()
+        except Exception as e:
+            logger.error(
+                "Failed to enter maintenance mode for unit '%s': %s", self.unit.name, str(e)
+            )
+            event.set_results({"actions": {}, "errors": str(e), "status": "failure"})
             event.fail()
 
     @property
