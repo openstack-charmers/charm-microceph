@@ -82,10 +82,10 @@ class MicroCephCharm(sunbeam_charm.OSBaseOperatorCharm):
         self.framework.observe(self.on.install, self._on_install)
         self.framework.observe(self.on.stop, self._on_stop)
         self.framework.observe(self.on.set_pool_size_action, self._set_pool_size_action)
-        self.framework.observe(self.on.exit_maintenance_action, self._exit_maintenance_action)
-        self.framework.observe(self.on.enter_maintenance_action, self._enter_maintenance_action)
         self.framework.observe(self.on.peers_relation_created, self._on_peer_relation_created)
         self.framework.observe(self.on["peers"].relation_departed, self._on_peer_relation_departed)
+        self.framework.observe(self.on.exit_maintenance_action, self._exit_maintenance_action)
+        self.framework.observe(self.on.enter_maintenance_action, self._enter_maintenance_action)
 
     def _on_install(self, event: ops.framework.EventBase) -> None:
         config = self.model.config.get

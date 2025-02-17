@@ -279,21 +279,25 @@ jobs:
         run: |
           set -eux
 
+          echo "Test dry running enter-maintenance and exit-maintenance actions."
+
           action_counts=$(juju run microceph/0 exit-maintenance dry-run=true --format json | jq '."microceph/0".results.actions | length')
           if [ "$action_counts" != "3" ] ; then
-            echo "Expect dry run exit-mainteance to produce 3 actions."
+            echo "Expect dry run exit-maintenance to produce 3 steps."
             exit 1
           fi
 
           action_counts=$(juju run microceph/0 enter-maintenance dry-run=true --format json | jq '."microceph/0".results.actions | length')
           if [ "$action_counts" != "4" ] ; then
-            echo "Expect dry run enter-maintenance to produce 3 action plan."
+            echo "Expect dry run enter-maintenance to produce 3 steps."
             exit 1
           fi
 
       - name: Test enter maintenance mode okay
         run: |
           set -eux
+
+          echo "Test running enter-maintenance action."
 
           status=$(juju run microceph/3 enter-maintenance stop-osds=true --format json | jq '."microceph/3".results.status' -r )
           if [ "$status" != "success" ] ; then
@@ -319,6 +323,8 @@ jobs:
       - name: Test exit maintenance mode okay
         run: |
           set -eux
+
+          echo "Test running exit-maintenance action."
 
           status=$(juju run microceph/3 exit-maintenance --format json | jq '."microceph/3".results.status' -r )
           if [ "$status" != "success" ] ; then
@@ -349,6 +355,8 @@ jobs:
       - name: Test enter maintenance mode fail
         run: |
           set -eux
+
+          echo "Test running enter-maintenance action (fail case)."
 
           result=$(juju run microceph/2 enter-maintenance stop-osds=true --format json)
 
