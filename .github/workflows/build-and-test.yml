@@ -259,7 +259,12 @@ jobs:
       - name: Enable one extra ceph mon for redundancy
         run: |
           set -eux
-          juju ssh microceph/3 -- sudo microceph enable mon
+
+          echo "Make sure all units have ceph monitor enabled."
+
+          for i in 1 2 3 4 ; do
+            juju ssh microceph/$i -- sudo microceph enable mon || true
+          done
 
       - name: Add disks
         run: |
@@ -275,19 +280,30 @@ jobs:
           juju ssh microceph/0 -- sudo microceph status
           juju ssh microceph/0 -- sudo microceph.ceph -s
 
+      - name: Assert Ceph is in healthy state before running test
+        run: |
+          set -eux
+          juju ssh microceph/0 -- sudo microceph.ceph health | grep HEALTH_OK
+
       - name: Dry run test
         run: |
           set -eux
 
           echo "Test dry running enter-maintenance and exit-maintenance actions."
 
-          action_counts=$(juju run microceph/0 exit-maintenance dry-run=true --format json | jq '."microceph/0".results.actions | length')
+          result=$(juju run microceph/0 exit-maintenance dry-run=true --format json)
+          echo $result
+
+          action_counts=$(echo $result | jq '."microceph/0".results.actions | length')
           if [ "$action_counts" != "3" ] ; then
             echo "Expect dry run exit-maintenance to produce 3 steps."
             exit 1
           fi
 
-          action_counts=$(juju run microceph/0 enter-maintenance dry-run=true --format json | jq '."microceph/0".results.actions | length')
+          result=$(juju run microceph/0 enter-maintenance dry-run=true --format json)
+          echo $result
+
+          action_counts=$(echo $result | jq '."microceph/0".results.actions | length')
           if [ "$action_counts" != "4" ] ; then
             echo "Expect dry run enter-maintenance to produce 3 steps."
             exit 1
@@ -299,7 +315,10 @@ jobs:
 
           echo "Test running enter-maintenance action."
 
-          status=$(juju run microceph/3 enter-maintenance stop-osds=true --format json | jq '."microceph/3".results.status' -r )
+          result=$(juju run microceph/3 enter-maintenance stop-osds=true --format json)
+          echo $result
+
+          status=$(echo $result | jq '."microceph/3".results.status' -r )
           if [ "$status" != "success" ] ; then
             echo "Expect enter-maintenance to succeed."
             exit 1
@@ -326,7 +345,10 @@ jobs:
 
           echo "Test running exit-maintenance action."
 
-          status=$(juju run microceph/3 exit-maintenance --format json | jq '."microceph/3".results.status' -r )
+          result=$(juju run microceph/3 exit-maintenance --format json)
+          echo $result
+
+          status=$(echo $result | jq '."microceph/3".results.status' -r )
           if [ "$status" != "success" ] ; then
             echo "Expect exit-maintenance to succeed."
             exit 1
@@ -359,6 +381,7 @@ jobs:
           echo "Test running enter-maintenance action (fail case)."
 
           result=$(juju run microceph/2 enter-maintenance stop-osds=true --format json)
+          echo $result
 
           has_errors=$(echo $result | jq '."microceph/2".results.errors != ""')
           if [ "$has_errors" != "true" ] ; then
