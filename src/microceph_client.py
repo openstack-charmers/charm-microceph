@@ -60,6 +60,14 @@ class UnrecognizedClusterConfigOption(RemoteException):
     pass
 
 
+class MaintenanceOperationFailedException(RemoteException):
+    """Raised when any maintenance operation failed."""
+
+    def __init__(self, message: str, response: dict[Any]):
+        super().__init__(message)
+        self.response = response
+
+
 class BaseService(ABC):
     """BaseService is the base service class for microclusterd services."""
 
@@ -111,6 +119,8 @@ class BaseService(ABC):
                 raise UnrecognizedClusterConfigOption("Option not found")
             elif "Error EINVAL: unrecognized config target" in error:
                 raise UnrecognizedClusterConfigOption("Option not found")
+            elif "maintenance operations failed" in error:
+                raise MaintenanceOperationFailedException(error, response.json())
             else:
                 raise e
 
@@ -207,3 +217,37 @@ class ClusterService(BaseService):
         """Get mon addresses."""
         mon_status = self._get("/1.0/services/mon").get("metadata")
         return mon_status.get("addresses", [])
+
+    def exit_maintenance_mode(
+        self, node: str, dry_run: bool, check_only: bool, ignore_check: bool
+    ) -> List[str]:
+        """Bring the node out of maintenance mode."""
+        data = {
+            "status": "non-maintenance",
+            "dry_run": dry_run,
+            "check_only": check_only,
+            "ignore_check": ignore_check,
+        }
+        return self._put(f"/1.0/ops/maintenance/{node}", data=json.dumps(data))
+
+    def enter_maintenance_mode(
+        self,
+        node: str,
+        force: bool,
+        dry_run: bool,
+        set_noout: bool,
+        stop_osds: bool,
+        check_only: bool,
+        ignore_check: bool,
+    ) -> List[str]:
+        """Bring the node into maintenance mode."""
+        data = {
+            "status": "maintenance",
+            "force": force,
+            "dry_run": dry_run,
+            "set_noout": set_noout,
+            "stop_osds": stop_osds,
+            "check_only": check_only,
+            "ignore_check": ignore_check,
+        }
+        return self._put(f"/1.0/ops/maintenance/{node}", data=json.dumps(data))
