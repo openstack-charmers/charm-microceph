@@ -247,7 +247,7 @@ jobs:
       - name: Install MicroCeph charm
         run: |
           date
-          juju deploy -n 4 ~/artifacts/microceph.charm --config default-pool-size=1
+          juju deploy -n 4 ~/artifacts/microceph.charm
           ./tests/scripts/ci_helpers.sh wait_for_microceph_bootstrap
           date
 
