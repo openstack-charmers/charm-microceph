@@ -1,6 +1,6 @@
 options:
   snap-channel:
-    default: "squid/edge"
+    default: "squid/stable"
     type: string
     description: |
       The snap-channel option determines the MicroCeph snap that is
